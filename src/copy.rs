@@ -352,18 +352,31 @@ impl<T: 'static> Clone for State<T> {
 impl<T: 'static> Copy for State<T> {}
 
 impl<T: 'static> State<T> {
-    pub fn set(&self, value: T) {
-        self.modify(|x| *x = value)
+    pub fn map<U: 'static, F: Fn(&T) -> &U, FMut: Fn(&mut T) -> &mut U, Up: Fn()>(
+        self,
+        f: F,
+        f_mut: FMut,
+        update: Up,
+    ) -> Mapped<T, U, F, FMut, Up> {
+        Mapped {
+            inner: self,
+            f,
+            f_mut,
+            update,
+            phantom: PhantomData,
+        }
     }
+}
 
-    pub fn with<U: 'static, F: FnOnce(&T) -> U>(&self, f: F) -> U {
+impl<T: 'static> StateIO<T> for State<T> {
+    fn with<U: 'static, F: FnOnce(&T) -> U>(&self, f: F) -> U {
         unsafe {
             let r = self.raw.borrow::<T>();
             f(&*r)
         }
     }
 
-    pub fn modify<F: FnOnce(&mut T)>(&self, f: F) {
+    fn with_mut<F: FnOnce(&mut T) -> O, O>(&self, f: F) -> O {
         unsafe {
             let mut r = self.raw.borrow_mut::<T>();
             f(&mut *r)
@@ -371,8 +384,46 @@ impl<T: 'static> State<T> {
     }
 }
 
-impl<T: 'static + Copy> State<T> {
-    pub fn get(&self) -> T {
+pub trait StateIO<T: 'static> {
+    fn with<U: 'static, F: FnOnce(&T) -> U>(&self, f: F) -> U;
+    fn with_mut<F: FnOnce(&mut T) -> O, O>(&self, f: F) -> O;
+    fn set(&self, value: T) {
+        self.with_mut(|x| *x = value)
+    }
+    fn get(&self) -> T
+    where
+        T: Sized + Copy,
+    {
         self.with(|x| *x)
+    }
+}
+
+pub struct Mapped<T: 'static, O: 'static, F, FMut, Up>
+where
+    F: Fn(&T) -> &O,
+    FMut: Fn(&mut T) -> &mut O,
+    Up: Fn(),
+{
+    inner: State<T>,
+    f: F,
+    f_mut: FMut,
+    update: Up,
+    phantom: PhantomData<O>,
+}
+
+impl<T: 'static, O: 'static, F, FMut, Up> StateIO<O> for Mapped<T, O, F, FMut, Up>
+where
+    F: Fn(&T) -> &O,
+    FMut: Fn(&mut T) -> &mut O,
+    Up: Fn(),
+{
+    fn with<U: 'static, F2: FnOnce(&O) -> U>(&self, f: F2) -> U {
+        self.inner.with(|x| f((self.f)(x)))
+    }
+
+    fn with_mut<F2: FnOnce(&mut O) -> O2, O2>(&self, f: F2) -> O2 {
+        let r = self.inner.with_mut(|x| f((self.f_mut)(x)));
+        (self.update)();
+        r
     }
 }

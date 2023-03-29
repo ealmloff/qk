@@ -1,3 +1,4 @@
+mod data;
 mod node;
 
 use node::{
@@ -56,7 +57,7 @@ impl ToTokens for Elements {
         let update_dynamic_nodes = update_dyn_nodes(&builder.dynamic_nodes);
 
         tokens.extend(quote! {
-            fn get_template(ui: &mut impl Renderer) -> (#(#return_type),*) {
+            fn get_template<P: PlatformEvents>(mut ui: impl Renderer<P>) -> (#(#return_type),*) {
                 static mut TEMPLATE: Option<(#(#return_type),*)> = None;
                 match unsafe { TEMPLATE } {
                     Some(id) => id,
@@ -139,10 +140,14 @@ impl ElementBuilder {
             let NodeAttribute { key, value } = attr;
 
             let key = key.to_string();
-
             let value = value.as_ref().unwrap().as_ref();
 
-            if let Expr::Lit(ExprLit {
+            if key.starts_with("on") {
+                dyn_attributes.push(DynamicAttribute {
+                    key,
+                    value: value.clone(),
+                });
+            } else if let Expr::Lit(ExprLit {
                 lit: Lit::Str(lit_str),
                 ..
             }) = &value
@@ -268,30 +273,4 @@ impl Root {
 fn node_ident(id: DefaultKey) -> proc_macro2::Ident {
     let id = id.data().as_ffi();
     proc_macro2::Ident::new(&format!("__n_{id}"), proc_macro2::Span::call_site())
-}
-
-#[test]
-fn parses() {
-    let tokens = quote! {
-        <tr>
-            <td class="col-md-1"> </td>
-            <td class="col-md-4">
-                <a class="lbl"> </a>
-            </td>
-            <td class="col-md-1">
-                <a class="remove">
-                    <span class="glyphicon glyphicon-remove remove" aria-hidden="true"></span>
-                </a>
-            </td>
-            <td class="col-md-6"></td>
-        </tr>
-    };
-
-    let nodes = syn_rsx::parse2(tokens).unwrap();
-
-    let builder = ElementBuilder::new(&nodes);
-
-    println!("{}", builder.creation);
-
-    panic!();
 }

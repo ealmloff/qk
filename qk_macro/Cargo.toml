@@ -10,7 +10,7 @@ eyre = "0.6.8"
 proc-macro2 = "1.0.53"
 quote = "1.0.26"
 slotmap = "1.0.6"
-syn = "1.0.9"
+syn = { version="1", features=["full", "visit-mut", "visit"] }
 syn-rsx = "0.9.0"
 
 [lib]

@@ -3,16 +3,15 @@ name = "qk"
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
 bumpalo = { version = "3.12.0", optional = true }
 slotmap = { version = "1.0.6", optional = true }
-sledgehammer_bindgen = { path = "D:/Users/Desktop/github/sledgehammer-bindgen" }
+sledgehammer_bindgen = "*"
 sledgehammer_utils = "0.1.0"
 wasm-bindgen = "0.2.84"
-web-sys = { version = "0.3.59", features = ["Node", "console"] }
+web-sys = { version = "0.3.59", features = ["Node", "Event", "console", "AnimationEvent", "BeforeUnloadEvent", "CompositionEvent", "DeviceMotionEvent", "DeviceOrientationEvent", "DragEvent", "ErrorEvent", "FocusEvent", "GamepadEvent", "HashChangeEvent", "InputEvent", "KeyboardEvent", "MessageEvent", "MouseEvent", "PageTransitionEvent", "PointerEvent", "PopStateEvent", "PromiseRejectionEvent", "SecurityPolicyViolationEvent", "StorageEvent", "SubmitEvent", "TouchEvent", "TransitionEvent", "UiEvent", "WheelEvent", "ProgressEvent", "Element"] }
 qk_macro = { path = "qk_macro" }
+js-sys = "0.3.61"
 
 [profile.release]
 opt-level = 3

@@ -23,8 +23,15 @@ impl DynamicNode {
                 let attributes = element.attributes.iter().map(|attribute| {
                     let key = &attribute.key;
                     let value = &attribute.value;
-                    quote! {
-                        ui.set_attribute(#id, #key, #value);
+                    if let Some(event) = key.strip_prefix("on") {
+                        let as_ident = Ident::new(event, proc_macro2::Span::call_site());
+                        quote! {
+                            ui.add_listener(#id, qk::events::#as_ident, Box::new(#value));
+                        }
+                    } else {
+                        quote! {
+                            ui.set_attribute(#id, #key, #value);
+                        }
                     }
                 });
 
@@ -209,34 +216,4 @@ pub fn update_dyn_nodes(depth_first_nodes: &[DynamicNode]) -> proc_macro2::Token
             #update_nodes
         )*
     }
-}
-
-#[test]
-fn traverse() {
-    let tokens = quote! {
-        <tr danger={if true {"danger"} else {""}} >
-            <td class="col-md-1">"{x}"</td>
-            <td class="col-md-4">
-                <a class="lbl">"{1234}"</a>
-            </td>
-            <td class="col-md-1">
-                <a class="remove">
-                    <span class="glyphicon glyphicon-remove remove" aria-hidden="true"></span>
-                </a>
-            </td>
-            <td class="col-md-6"></td>
-        </tr>
-    };
-
-    let nodes = syn_rsx::parse2(tokens).unwrap();
-
-    let builder = crate::ElementBuilder::new(&nodes);
-
-    println!("{:#?}", builder.dynamic_nodes);
-
-    let code = update_dyn_nodes(&builder.dynamic_nodes);
-
-    println!("{code}");
-
-    panic!();
 }
