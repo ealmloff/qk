@@ -12,6 +12,7 @@ wasm-bindgen = "0.2.84"
 web-sys = { version = "0.3.59", features = ["Node", "Event", "console", "AnimationEvent", "BeforeUnloadEvent", "CompositionEvent", "DeviceMotionEvent", "DeviceOrientationEvent", "DragEvent", "ErrorEvent", "FocusEvent", "GamepadEvent", "HashChangeEvent", "InputEvent", "KeyboardEvent", "MessageEvent", "MouseEvent", "PageTransitionEvent", "PointerEvent", "PopStateEvent", "PromiseRejectionEvent", "SecurityPolicyViolationEvent", "StorageEvent", "SubmitEvent", "TouchEvent", "TransitionEvent", "UiEvent", "WheelEvent", "ProgressEvent", "Element"] }
 qk_macro = { path = "qk_macro" }
 js-sys = "0.3.61"
+num-traits = "0.2.15"
 
 [profile.release]
 opt-level = 3
