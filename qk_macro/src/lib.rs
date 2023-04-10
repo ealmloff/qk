@@ -1,6 +1,11 @@
-mod data;
+mod component;
+mod component_visitor;
+mod component_visitor_mut;
+mod memo;
 mod node;
+mod state;
 
+use component::Component;
 use node::{
     update_dyn_nodes, DynElement, DynText, DynamicAttribute, DynamicNode, TraverseOperation,
 };
@@ -10,6 +15,15 @@ use quote::{quote, ToTokens};
 use slotmap::{DefaultKey, Key, SlotMap};
 use syn::{parse::Parse, parse_macro_input, parse_str, Expr, ExprLit, Lit};
 use syn_rsx::{Node, NodeAttribute, NodeElement, NodeText, ParserConfig};
+
+#[proc_macro_attribute]
+pub fn component(_args: TokenStream, input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as Component);
+
+    TokenStream::from(quote! {
+        #input
+    })
+}
 
 #[proc_macro]
 pub fn rsx(input: TokenStream) -> TokenStream {

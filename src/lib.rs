@@ -14,8 +14,8 @@ pub use qk_macro;
 
 #[derive(Default)]
 pub struct DirtyTrackSet<R, W> {
-    read: Cell<R>,
-    write: Cell<W>,
+    pub read: Cell<R>,
+    pub write: Cell<W>,
 }
 
 impl<R: PrimInt, W: PrimInt> DirtyTrackSet<R, W> {
@@ -48,9 +48,10 @@ impl<R: PrimInt, W: PrimInt> DirtyTrackSet<R, W> {
     }
 }
 
+#[derive(Copy, Clone)]
 pub struct DirtyTrack<'a, R, W> {
-    data: &'a DirtyTrackSet<R, W>,
-    num: u8,
+    pub data: &'a DirtyTrackSet<R, W>,
+    pub num: u8,
 }
 
 impl<R: PrimInt, W: PrimInt> DirtyTrack<'_, R, W> {
@@ -68,8 +69,8 @@ impl<R: PrimInt, W: PrimInt> DirtyTrack<'_, R, W> {
 }
 
 pub struct RwTrack<'a, T, R, W> {
-    data: &'a mut T,
-    tracking: DirtyTrack<'a, R, W>,
+    pub data: &'a mut T,
+    pub tracking: DirtyTrack<'a, R, W>,
 }
 
 impl<T, R: PrimInt, W: PrimInt> Deref for RwTrack<'_, T, R, W> {
@@ -130,8 +131,8 @@ fn rw_track() {
     }
 }
 
-struct Effect<F: ?Sized, T> {
-    rx: Box<F>,
-    rx_subscriptions: u8,
-    current: T,
+pub struct Effect<F: ?Sized, T> {
+    pub rx: Box<F>,
+    pub rx_subscriptions: u8,
+    pub current: T,
 }

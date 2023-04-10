@@ -47,4 +47,42 @@
 //     }
 // }
 
-fn main() {}
+use qk::*;
+use qk_macro::component;
+
+fn main() {
+    #[component]
+    fn Foo(cx: Scope) {
+        let x: Rx<i32> = 0;
+        let y: Rx<i32> = 0;
+        let z: Rx<Vec<i32>> = vec![];
+        let w = 0;
+        rx(move || {
+            let x = *x;
+            println!("{x} {w}");
+        });
+        rx(move || {
+            let x = *x;
+            let y = *y;
+            println!("{x}");
+        });
+        rx(move || {
+            let x = *x;
+            let y = *y;
+            let z = &*z;
+            let mut w = z.clone();
+            w.push(x);
+            println!("{w:?}");
+        });
+
+        x += 1;
+    }
+    println!("with_x");
+    comp.with_x(|mut x| {
+        *x = *x + 1;
+    });
+    println!("with_z");
+    comp.with_z(|mut z| {
+        z.push(1);
+    });
+}
