@@ -13,6 +13,7 @@ web-sys = { version = "0.3.59", features = ["Node", "Event", "console", "Animati
 qk_macro = { path = "qk_macro" }
 js-sys = "0.3.61"
 num-traits = "0.2.15"
+once_cell = "1.17.1"
 
 [profile.release]
 opt-level = 3

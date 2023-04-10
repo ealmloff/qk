@@ -3,6 +3,8 @@ use quote::{quote, ToTokens};
 use syn::Expr;
 use syn_rsx::NodeValueExpr;
 
+use crate::format::FormattedText;
+
 #[derive(Debug)]
 pub struct DynamicNode {
     pub id: usize,
@@ -83,7 +85,7 @@ pub struct DynamicAttribute {
 
 #[derive(Debug)]
 pub struct DynText {
-    pub text: Expr,
+    pub text: FormattedText,
 }
 
 #[derive(Debug)]

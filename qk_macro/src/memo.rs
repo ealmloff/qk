@@ -38,7 +38,7 @@ impl std::fmt::Debug for Memo {
 impl Memo {
     pub fn ty(&self, component: &Component) -> TokenStream {
         let ty = &self.ty;
-        let types = self.types(&component);
+        let types = self.types(component);
         quote! {
             Effect<dyn Fn(#types), #ty>
         }
@@ -121,22 +121,6 @@ impl Memo {
                     current,
                 }
             };
-        }
-    }
-
-    fn call(&self, component: &Component) -> TokenStream {
-        let states = &component.states;
-        let ident_name = self.ident();
-        let private_name = Ident::new(&format!("__{ident_name}"), ident_name.span());
-
-        let subscribers = self.subscriptions.iter().map(|id| states[*id].name.clone());
-
-        quote! {
-            #private_name(
-                #(
-                    #subscribers,
-                )*
-            );
         }
     }
 
