@@ -4,6 +4,7 @@ use syn::Expr;
 use syn_rsx::NodeValueExpr;
 
 use crate::format::FormattedText;
+use crate::rsx::Root;
 
 #[derive(Debug)]
 pub struct DynamicNode {
@@ -32,7 +33,7 @@ impl DynamicNode {
                         }
                     } else {
                         quote! {
-                            ui.set_attribute(#id, #key, #value);
+                            ui.set_attribute(#id, #key, &#value);
                         }
                     }
                 });
@@ -48,7 +49,7 @@ impl DynamicNode {
             DynamicNodeType::Text(text) => {
                 let text = &text.text;
                 quote! {
-                    ui.set_text(#id, #text);
+                    ui.set_text(#id, &#text);
                 }
             }
             DynamicNodeType::Fragment(_) => {
@@ -93,7 +94,7 @@ pub struct DynFragment {
     pub children: NodeValueExpr,
 }
 
-pub fn update_dyn_nodes(depth_first_nodes: &[DynamicNode]) -> proc_macro2::TokenStream {
+pub fn update_dyn_nodes(roots: &[Root]) -> proc_macro2::TokenStream {
     #[derive(Debug)]
     struct TraverseNode {
         id: Ident,
@@ -177,27 +178,55 @@ pub fn update_dyn_nodes(depth_first_nodes: &[DynamicNode]) -> proc_macro2::Token
         }
     }
 
-    let ids: Vec<_> = depth_first_nodes.iter().map(|node| node.ident()).collect();
-
-    // The root must be dynamic
-    let dyn_root = ids[depth_first_nodes
+    let ids: Vec<_> = roots
         .iter()
-        .position(|node| node.path.is_empty())
-        .unwrap()]
-    .clone();
+        .flat_map(|root| root.dynamic_nodes.iter().map(|node| node.ident()))
+        .collect();
 
-    let mut root = TraverseNode {
-        id: dyn_root.clone(),
-        next: None,
-        child: None,
-    };
+    let traverse_roots = roots.iter().map(|root| {
+        // The roots must be dynamic
+        let root_name = root
+            .dynamic_nodes
+            .iter()
+            .enumerate()
+            .find(|(_, node)| node.path.is_empty())
+            .map(|(idx, _)| ids[idx].clone())
+            .unwrap();
 
-    for node in depth_first_nodes {
-        let id = ids[node.id].clone();
-        root.insert(id, &node.path);
-    }
+        let mut traverse_root = TraverseNode {
+            id: root_name,
+            next: None,
+            child: None,
+        };
 
-    let update_nodes = depth_first_nodes.iter().map(|node| node.update());
+        for node in &root.dynamic_nodes {
+            let id = ids[node.id].clone();
+            traverse_root.insert(id, &node.path);
+        }
+
+        traverse_root
+    });
+
+    let clone_nodes = roots.iter().enumerate().map(|(i, root)| {
+        let root_name = root
+            .dynamic_nodes
+            .iter()
+            .enumerate()
+            .find(|(_, node)| node.path.is_empty())
+            .map(|(idx, _)| ids[idx].clone())
+            .unwrap();
+
+        let idx = syn::Index::from(i);
+
+        quote! {
+            ui.clone_node(tmpl.#idx, #root_name);
+            roots[#i] = #root_name;
+        }
+    });
+
+    let update_nodes = roots
+        .iter()
+        .flat_map(|root| root.dynamic_nodes.iter().map(|node| node.update()));
 
     quote! {
         // initialize all the variables
@@ -207,11 +236,10 @@ pub fn update_dyn_nodes(depth_first_nodes: &[DynamicNode]) -> proc_macro2::Token
 
         // create the root
         let tmpl = get_template(ui);
-        ui.clone_node(tmpl, #dyn_root);
-        roots[0] = #dyn_root;
+        #(#clone_nodes)*
 
         // traverse the tree
-        #root
+        #(#traverse_roots)*
 
         // update the nodes
         #(

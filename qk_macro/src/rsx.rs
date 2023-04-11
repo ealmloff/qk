@@ -7,10 +7,10 @@ use crate::{
         TraverseOperation,
     },
 };
-use proc_macro2::Ident;
+use proc_macro2::{Ident, TokenStream};
 use quote::{quote, ToTokens};
 use slotmap::{DefaultKey, Key, SlotMap};
-use syn::{parse::Parse, parse_str, Expr, ExprLit, Lit};
+use syn::{parse::Parse, parse_quote, Expr, ExprLit, Lit};
 use syn_rsx::{Node, NodeAttribute, NodeElement, NodeText, ParserConfig};
 
 pub struct Elements {
@@ -36,21 +36,12 @@ impl ToTokens for Elements {
 
         let return_roots: Vec<_> = roots
             .iter()
-            .map(|root| match root {
-                Root::Static(id) => node_ident(*id).to_token_stream(),
-                Root::Dynamic(id) => id.to_token_stream(),
-            })
+            .map(|root| root.root_name.as_ref().unwrap())
             .collect();
 
-        let return_type: Vec<_> = roots
-            .iter()
-            .map(|root| match root {
-                Root::Static(_) => quote! { u32 },
-                Root::Dynamic(_) => quote! { u32 },
-            })
-            .collect();
+        let return_type: Vec<_> = roots.iter().map(|_| quote! { u32 }).collect();
 
-        let update_dynamic_nodes = update_dyn_nodes(&builder.dynamic_nodes);
+        let update_dynamic_nodes = update_dyn_nodes(&roots);
 
         tokens.extend(quote! {
             fn get_template<P: PlatformEvents>(mut ui: impl qk::prelude::Renderer<P>) -> (#(#return_type),*) {
@@ -71,7 +62,6 @@ struct ElementBuilder {
     slots: SlotMap<DefaultKey, ()>,
     roots: Vec<Root>,
     creation: proc_macro2::TokenStream,
-    dynamic_nodes: Vec<DynamicNode>,
     current_path: Vec<TraverseOperation>,
 }
 
@@ -81,23 +71,33 @@ impl ElementBuilder {
             slots: SlotMap::new(),
             creation: Default::default(),
             roots: Default::default(),
-            dynamic_nodes: Default::default(),
             current_path: Default::default(),
         };
 
         for element in elements {
-            let root = myself.build_node(element, true);
-            myself.roots.extend(root);
+            let mut root = Root {
+                dynamic_nodes: Default::default(),
+                root_name: None,
+            };
+            let nodes = myself.build_node(&mut root, element, true);
+            assert_eq!(nodes.len(), 1);
+            root.root_name = Some(match &nodes[0] {
+                QkNode::Static(id) => node_ident(*id).to_token_stream(),
+                QkNode::Dynamic(id) => id.to_token_stream(),
+            });
+            myself.roots.push(root);
         }
 
         myself
     }
 
-    fn build_node(&mut self, node: &Node, force_dyn: bool) -> Vec<Root> {
+    fn build_node(&mut self, root: &mut Root, node: &Node, force_dyn: bool) -> Vec<QkNode> {
         match node {
-            Node::Element(el) => vec![Root::Static(self.build_element(el, force_dyn))],
+            Node::Element(el) => vec![QkNode::Static(self.build_element(root, el, force_dyn))],
             Node::Attribute(_) => todo!(),
-            Node::Text(text) => vec![Root::Static(self.build_text(text))],
+            Node::Text(text) => {
+                vec![QkNode::Static(self.build_text(root, text, force_dyn))]
+            }
             Node::Comment(_) => todo!(),
             Node::Doctype(_) => todo!(),
             Node::Block(_) => todo!(),
@@ -105,7 +105,12 @@ impl ElementBuilder {
         }
     }
 
-    fn build_element(&mut self, element: &NodeElement, force_dyn: bool) -> DefaultKey {
+    fn build_element(
+        &mut self,
+        root: &mut Root,
+        element: &NodeElement,
+        force_dyn: bool,
+    ) -> DefaultKey {
         let NodeElement {
             name,
             attributes,
@@ -145,9 +150,17 @@ impl ElementBuilder {
             }) = &value
             {
                 let value = lit_str.value();
-                self.creation.extend(quote! {
-                    ui.set_attribute(#ident, #key, #value);
-                });
+                let value = FormattedText::from_str(&value).unwrap();
+                if value.is_dynamic() {
+                    dyn_attributes.push(DynamicAttribute {
+                        key,
+                        value: parse_quote! {#value},
+                    });
+                } else {
+                    self.creation.extend(quote! {
+                        ui.set_attribute(#ident, #key, #value);
+                    });
+                }
             } else {
                 dyn_attributes.push(DynamicAttribute {
                     key,
@@ -157,8 +170,8 @@ impl ElementBuilder {
         }
 
         if !dyn_attributes.is_empty() || force_dyn {
-            let id = self.dynamic_nodes.len();
-            self.dynamic_nodes.push(DynamicNode {
+            let id = root.dynamic_nodes.len();
+            root.dynamic_nodes.push(DynamicNode {
                 id,
                 path: self.current_path.clone(),
                 node: node::DynamicNodeType::Element(DynElement {
@@ -173,7 +186,7 @@ impl ElementBuilder {
         self.current_path.push(TraverseOperation::FirstChild);
 
         for child in children {
-            let children = self.build_node(child, false);
+            let children = self.build_node(root, child, false);
             for child in children {
                 self.creation.extend(child.append_children(&ident));
             }
@@ -185,7 +198,7 @@ impl ElementBuilder {
         id
     }
 
-    fn build_text(&mut self, text: &NodeText) -> DefaultKey {
+    fn build_text(&mut self, root: &mut Root, text: &NodeText, force_dyn: bool) -> DefaultKey {
         let id = self.slots.insert(());
         let ident = node_ident(id);
 
@@ -198,9 +211,9 @@ impl ElementBuilder {
         {
             let value = FormattedText::from_str(&lit_str.value()).unwrap();
             if value.is_dynamic() {
-                let id = self.dynamic_nodes.len();
+                let id = root.dynamic_nodes.len();
 
-                self.dynamic_nodes.push(DynamicNode {
+                root.dynamic_nodes.push(DynamicNode {
                     id,
                     path: self.current_path.clone(),
                     node: node::DynamicNodeType::Text(DynText { text: value }),
@@ -212,14 +225,23 @@ impl ElementBuilder {
                     ui.create_text(#ident, " ");
                 });
             } else {
+                if force_dyn {
+                    let id = root.dynamic_nodes.len();
+
+                    root.dynamic_nodes.push(DynamicNode {
+                        id,
+                        path: self.current_path.clone(),
+                        node: node::DynamicNodeType::Text(DynText { text: value }),
+                    });
+                }
                 self.creation.extend(quote! {
                     let #ident = ui.node();
                     ui.create_text(#ident, #lit_str);
                 });
             }
         } else {
-            let id = self.dynamic_nodes.len();
-            self.dynamic_nodes.push(DynamicNode {
+            let id = root.dynamic_nodes.len();
+            root.dynamic_nodes.push(DynamicNode {
                 id,
                 path: self.current_path.clone(),
                 node: node::DynamicNodeType::Text(DynText {
@@ -244,15 +266,20 @@ impl ElementBuilder {
     }
 }
 
-enum Root {
+pub struct Root {
+    pub dynamic_nodes: Vec<DynamicNode>,
+    pub root_name: Option<TokenStream>,
+}
+
+pub enum QkNode {
     Static(DefaultKey),
     Dynamic(Ident),
 }
 
-impl Root {
+impl QkNode {
     fn append_children(&self, to: &Ident) -> proc_macro2::TokenStream {
         match self {
-            Root::Static(key) => {
+            QkNode::Static(key) => {
                 let key = node_ident(*key);
                 quote! {
                     ui.append_child(#to, #key);
@@ -260,7 +287,7 @@ impl Root {
                 }
             }
 
-            Root::Dynamic(dynamic) => quote! {
+            QkNode::Dynamic(dynamic) => quote! {
                 ui.append_all(#to, #dynamic);
             },
         }

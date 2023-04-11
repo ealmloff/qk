@@ -1,11 +1,8 @@
 use proc_macro2::{Ident, TokenStream};
-use quote::{quote, ToTokens};
+use quote::quote;
 use std::collections::HashSet;
-use syn::token::{Move, Static};
-use syn::visit::{self, Visit};
-use syn::visit_mut::{self, VisitMut};
-use syn::{parse::Parse, Expr, Type};
-use syn::{parse_quote, ExprPath, Item, ItemFn, Pat, PathArguments, PathSegment, TypeTuple};
+use syn::parse_quote;
+use syn::{Expr, Type};
 
 /// State that belongs to a component.
 #[derive(Clone)]
