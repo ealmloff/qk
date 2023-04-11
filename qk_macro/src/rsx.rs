@@ -44,13 +44,13 @@ impl ToTokens for Elements {
         let update_dynamic_nodes = update_dyn_nodes(&roots);
 
         tokens.extend(quote! {
-            fn get_template<P: PlatformEvents>(mut ui: impl qk::prelude::Renderer<P>) -> (#(#return_type),*) {
-                static TEMPLATE: once_cell::sync::OnceCell<(#(#return_type),*)> = once_cell::sync::OnceCell::new();
-                let (#(#return_roots),*) = TEMPLATE.get_or_init(|| {
+            fn get_template<P: PlatformEvents>(mut ui: impl qk::prelude::Renderer<P>) -> (#(#return_type,)*) {
+                static TEMPLATE: once_cell::sync::OnceCell<(#(#return_type,)*)> = once_cell::sync::OnceCell::new();
+                let (#(#return_roots,)*) = TEMPLATE.get_or_init(|| {
                     #creation
-                    (#(#return_roots),*)
+                    (#(#return_roots,)*)
                 });
-                (#(*#return_roots),*)
+                (#(*#return_roots,)*)
             }
 
             #update_dynamic_nodes
