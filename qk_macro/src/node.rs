@@ -183,19 +183,19 @@ pub fn update_dyn_nodes(roots: &[Root]) -> proc_macro2::TokenStream {
         }
     }
 
-    let ids: Vec<_> = roots
+    let ids: Vec<Vec<_>> = roots
         .iter()
-        .flat_map(|root| root.dynamic_nodes.iter().map(|node| node.ident()))
+        .map(|root| root.dynamic_nodes.iter().map(|node| node.ident()).collect())
         .collect();
 
-    let traverse_roots = roots.iter().map(|root| {
+    let traverse_roots = roots.iter().enumerate().map(|(root_idx, root)| {
         // The roots must be dynamic
         let root_name = root
             .dynamic_nodes
             .iter()
             .enumerate()
             .find(|(_, node)| node.path.is_empty())
-            .map(|(idx, _)| ids[idx].clone())
+            .map(|(idx, _)| ids[root_idx][idx].clone())
             .unwrap();
 
         let mut traverse_root = TraverseNode {
@@ -205,7 +205,7 @@ pub fn update_dyn_nodes(roots: &[Root]) -> proc_macro2::TokenStream {
         };
 
         for node in &root.dynamic_nodes {
-            let id = ids[node.id].clone();
+            let id = ids[root_idx][node.id].clone();
             traverse_root.insert(id, &node.path);
         }
 
@@ -218,7 +218,7 @@ pub fn update_dyn_nodes(roots: &[Root]) -> proc_macro2::TokenStream {
             .iter()
             .enumerate()
             .find(|(_, node)| node.path.is_empty())
-            .map(|(idx, _)| ids[idx].clone())
+            .map(|(idx, _)| ids[i][idx].clone())
             .unwrap();
 
         let idx = syn::Index::from(i);
@@ -236,7 +236,9 @@ pub fn update_dyn_nodes(roots: &[Root]) -> proc_macro2::TokenStream {
     quote! {
         // initialize all the variables
         #(
-            let #ids = ui.node();
+            #(
+                let #ids = ui.node();
+            )*
         )*
 
         // create the root

@@ -66,7 +66,7 @@ struct ElementBuilder {
 }
 
 impl ElementBuilder {
-    fn new(elements: &Vec<Node>) -> Self {
+    fn new(elements: &[Node]) -> Self {
         let mut myself = Self {
             slots: SlotMap::new(),
             creation: Default::default(),
