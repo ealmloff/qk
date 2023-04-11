@@ -74,8 +74,9 @@ impl ElementBuilder {
             current_path: Default::default(),
         };
 
-        for element in elements {
+        for (idx, element) in elements.iter().enumerate() {
             let mut root = Root {
+                idx,
                 dynamic_nodes: Default::default(),
                 root_name: None,
             };
@@ -149,8 +150,8 @@ impl ElementBuilder {
                 ..
             }) = &value
             {
-                let value = lit_str.value();
-                let value = FormattedText::from_str(&value).unwrap();
+                let str_value = lit_str.value();
+                let value = FormattedText::from_str(&str_value).unwrap();
                 if value.is_dynamic() {
                     dyn_attributes.push(DynamicAttribute {
                         key,
@@ -158,7 +159,7 @@ impl ElementBuilder {
                     });
                 } else {
                     self.creation.extend(quote! {
-                        ui.set_attribute(#ident, #key, #value);
+                        ui.set_attribute(#ident, #key, #str_value);
                     });
                 }
             } else {
@@ -172,6 +173,7 @@ impl ElementBuilder {
         if !dyn_attributes.is_empty() || force_dyn {
             let id = root.dynamic_nodes.len();
             root.dynamic_nodes.push(DynamicNode {
+                root_id: root.idx,
                 id,
                 path: self.current_path.clone(),
                 node: node::DynamicNodeType::Element(DynElement {
@@ -214,6 +216,7 @@ impl ElementBuilder {
                 let id = root.dynamic_nodes.len();
 
                 root.dynamic_nodes.push(DynamicNode {
+                    root_id: root.idx,
                     id,
                     path: self.current_path.clone(),
                     node: node::DynamicNodeType::Text(DynText { text: value }),
@@ -229,6 +232,7 @@ impl ElementBuilder {
                     let id = root.dynamic_nodes.len();
 
                     root.dynamic_nodes.push(DynamicNode {
+                        root_id: root.idx,
                         id,
                         path: self.current_path.clone(),
                         node: node::DynamicNodeType::Text(DynText { text: value }),
@@ -242,6 +246,7 @@ impl ElementBuilder {
         } else {
             let id = root.dynamic_nodes.len();
             root.dynamic_nodes.push(DynamicNode {
+                root_id: root.idx,
                 id,
                 path: self.current_path.clone(),
                 node: node::DynamicNodeType::Text(DynText {
@@ -267,6 +272,7 @@ impl ElementBuilder {
 }
 
 pub struct Root {
+    pub idx: usize,
     pub dynamic_nodes: Vec<DynamicNode>,
     pub root_name: Option<TokenStream>,
 }

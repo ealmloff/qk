@@ -8,6 +8,7 @@ use crate::rsx::Root;
 
 #[derive(Debug)]
 pub struct DynamicNode {
+    pub root_id: usize,
     pub id: usize,
     pub path: Vec<TraverseOperation>,
     pub node: DynamicNodeType,
@@ -16,7 +17,11 @@ pub struct DynamicNode {
 impl DynamicNode {
     pub fn ident(&self) -> Ident {
         let id = self.id;
-        Ident::new(&format!("__dyn_n_{id}"), proc_macro2::Span::call_site())
+        let root_id = self.root_id;
+        Ident::new(
+            &format!("__dyn_n_{root_id}_{id}"),
+            proc_macro2::Span::call_site(),
+        )
     }
 
     fn update(&self) -> TokenStream {
