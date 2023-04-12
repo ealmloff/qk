@@ -13,59 +13,35 @@ use slotmap::{DefaultKey, Key, SlotMap};
 use syn::{parse::Parse, parse_quote, Expr, ExprLit, Lit};
 use syn_rsx::{Node, NodeAttribute, NodeElement, NodeText, ParserConfig};
 
+#[derive(Debug)]
 pub struct Elements {
-    elements: Vec<Node>,
+    slots: SlotMap<DefaultKey, ()>,
+    pub roots: Vec<Root>,
+    creation: proc_macro2::TokenStream,
+    current_path: Vec<TraverseOperation>,
 }
 
 impl Parse for Elements {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let elements = syn_rsx::Parser::new(ParserConfig::default()).parse(input)?;
 
-        Ok(Self { elements })
+        Ok(Elements::new(&elements))
     }
 }
 
 impl ToTokens for Elements {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
-        let elements = &self.elements;
-
-        let builder = ElementBuilder::new(elements);
-
-        let creation = builder.creation;
-        let roots = builder.roots;
-
-        let return_roots: Vec<_> = roots
-            .iter()
-            .map(|root| root.root_name.as_ref().unwrap())
-            .collect();
-
-        let return_type: Vec<_> = roots.iter().map(|_| quote! { u32 }).collect();
-
-        let update_dynamic_nodes = update_dyn_nodes(&roots);
+        let get_template_fn = self.get_template_fn();
+        let update_dynamic_nodes = update_dyn_nodes(&self.roots);
 
         tokens.extend(quote! {
-            fn get_template<P: PlatformEvents>(mut ui: impl qk::prelude::Renderer<P>) -> (#(#return_type,)*) {
-                static TEMPLATE: once_cell::sync::OnceCell<(#(#return_type,)*)> = once_cell::sync::OnceCell::new();
-                let (#(#return_roots,)*) = TEMPLATE.get_or_init(|| {
-                    #creation
-                    (#(#return_roots,)*)
-                });
-                (#(*#return_roots,)*)
-            }
-
+            #get_template_fn
             #update_dynamic_nodes
         });
     }
 }
 
-struct ElementBuilder {
-    slots: SlotMap<DefaultKey, ()>,
-    roots: Vec<Root>,
-    creation: proc_macro2::TokenStream,
-    current_path: Vec<TraverseOperation>,
-}
-
-impl ElementBuilder {
+impl Elements {
     fn new(elements: &[Node]) -> Self {
         let mut myself = Self {
             slots: SlotMap::new(),
@@ -90,6 +66,29 @@ impl ElementBuilder {
         }
 
         myself
+    }
+
+    fn get_template_fn(&self) -> TokenStream {
+        let creation = &self.creation;
+        let roots = &self.roots;
+
+        let return_roots: Vec<_> = roots
+            .iter()
+            .map(|root| root.root_name.as_ref().unwrap())
+            .collect();
+
+        let return_type: Vec<_> = roots.iter().map(|_| quote! { u32 }).collect();
+
+        quote! {
+            fn get_template<P: PlatformEvents>(mut ui: impl qk::prelude::Renderer<P>) -> (#(#return_type,)*) {
+                static TEMPLATE: once_cell::sync::OnceCell<(#(#return_type,)*)> = once_cell::sync::OnceCell::new();
+                let (#(#return_roots,)*) = TEMPLATE.get_or_init(|| {
+                    #creation
+                    (#(#return_roots,)*)
+                });
+                (#(*#return_roots,)*)
+            }
+        }
     }
 
     fn build_node(&mut self, root: &mut Root, node: &Node, force_dyn: bool) -> Vec<QkNode> {
@@ -271,10 +270,21 @@ impl ElementBuilder {
     }
 }
 
+#[derive(Debug)]
 pub struct Root {
     pub idx: usize,
     pub dynamic_nodes: Vec<DynamicNode>,
     pub root_name: Option<TokenStream>,
+}
+
+impl Root {
+    fn root_ident(&self) -> proc_macro2::Ident {
+        self.dynamic_nodes
+            .iter()
+            .find(|n| n.path.is_empty())
+            .unwrap()
+            .ident()
+    }
 }
 
 pub enum QkNode {

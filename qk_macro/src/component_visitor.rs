@@ -1,19 +1,28 @@
 use crate::memo::Memo;
+use crate::rsx::Elements;
 use crate::state::State;
 use proc_macro2::Ident;
+use quote::ToTokens;
 use std::collections::HashSet;
 use syn::visit::{self, Visit};
-use syn::{Expr, Type};
+use syn::{parse2, Expr, Type};
 use syn::{ExprPath, Pat, PathArguments, PathSegment, TypeTuple};
 
 #[derive(Default, Debug)]
 pub struct ComponentVisitor {
     pub states: Vec<State>,
     pub memos: Vec<Memo>,
+    pub rsx: Option<Elements>,
     in_reactive: bool,
 }
 
 impl Visit<'_> for ComponentVisitor {
+    fn visit_macro(&mut self, mac: &syn::Macro) {
+        if dbg!(mac.path.to_token_stream().to_string()) == "rsx" {
+            self.rsx = parse2(mac.tokens.clone()).ok();
+        }
+    }
+
     fn visit_expr_call(&mut self, i: &syn::ExprCall) {
         if let Expr::Path(ExprPath { path, .. }) = &*i.func {
             if let Some(fn_name) = path.get_ident() {
@@ -34,7 +43,7 @@ impl Visit<'_> for ComponentVisitor {
                                 paren_token: Default::default(),
                                 elems: Default::default(),
                             }),
-                            closure: *closure_body,
+                            closure: Some(*closure_body),
                             capture,
                             subscriptions: visitor.subscribed.into_iter().collect(),
                             subscribers: HashSet::new(),

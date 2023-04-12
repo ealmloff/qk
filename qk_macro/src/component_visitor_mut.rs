@@ -47,7 +47,7 @@ impl VisitMut for ComponentVisitorMut<'_> {
                             if let Some(Expr::Closure(closure)) = expr.args.first().cloned() {
                                 let maybe_memo = &self.component.memos[self.memo_idx];
                                 self.memo_idx += 1;
-                                assert_eq!(&maybe_memo.closure, &*closure.body);
+                                assert_eq!(maybe_memo.closure.as_ref().unwrap(), &*closure.body);
 
                                 memo = Some(maybe_memo);
                             }

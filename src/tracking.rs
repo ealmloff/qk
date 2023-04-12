@@ -121,8 +121,8 @@ fn rw_track() {
     }
 }
 
-pub struct Effect<F: ?Sized, T> {
-    pub rx: Box<F>,
+pub struct Effect<F, T> {
+    pub rx: F,
     pub rx_subscriptions: u8,
     pub current: T,
 }

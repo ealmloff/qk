@@ -24,7 +24,14 @@ impl DynamicNode {
         )
     }
 
-    fn update(&self) -> TokenStream {
+    pub fn type_def(&self) -> TokenStream {
+        let name = self.ident();
+        quote! {
+            #name: u32
+        }
+    }
+
+    pub fn update(&self) -> TokenStream {
         let id = self.ident();
         match &self.node {
             DynamicNodeType::Element(element) => {
@@ -42,10 +49,6 @@ impl DynamicNode {
                         }
                     }
                 });
-
-                if !element.children.is_empty() {
-                    todo!()
-                }
 
                 quote! {
                     #(#attributes)*
@@ -225,13 +228,8 @@ pub fn update_dyn_nodes(roots: &[Root]) -> proc_macro2::TokenStream {
 
         quote! {
             ui.clone_node(tmpl.#idx, #root_name);
-            roots[#i] = #root_name;
         }
     });
-
-    let update_nodes = roots
-        .iter()
-        .flat_map(|root| root.dynamic_nodes.iter().map(|node| node.update()));
 
     quote! {
         // initialize all the variables
@@ -247,10 +245,5 @@ pub fn update_dyn_nodes(roots: &[Root]) -> proc_macro2::TokenStream {
 
         // traverse the tree
         #(#traverse_roots)*
-
-        // update the nodes
-        #(
-            #update_nodes
-        )*
     }
 }

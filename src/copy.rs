@@ -90,15 +90,15 @@ impl Runtime {
 macro_rules! hyristic {
     () => {
         struct Hyristics;
-        static mut GUESS: usize = 0;
+        static GUESS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
         impl $crate::copy::ScopeHyristics for Hyristics {
             fn guess_allocation() -> usize {
-                unsafe { GUESS }
+                GUESS.load(std::sync::atomic::Ordering::Relaxed)
             }
 
             fn update_guess(new: usize) {
-                unsafe { GUESS = new }
+                GUESS.store(new, std::sync::atomic::Ordering::Relaxed)
             }
         }
     };
@@ -108,15 +108,15 @@ macro_rules! hyristic {
 macro_rules! hyristic2 {
     () => {
         struct Hyristics2;
-        static mut GUESS2: usize = 0;
+        static GUESS2: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
         impl $crate::copy::ScopeHyristicsOwned for Hyristics2 {
             fn guess_owned() -> usize {
-                unsafe { GUESS2 }
+                GUESS2.load(std::sync::atomic::Ordering::Relaxed)
             }
 
             fn update_owned(new: usize) {
-                unsafe { GUESS2 = new }
+                GUESS2.store(new, std::sync::atomic::Ordering::Relaxed)
             }
         }
     };

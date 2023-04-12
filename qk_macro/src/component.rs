@@ -8,19 +8,21 @@ use syn::{parse_quote, ItemFn};
 use crate::component_visitor::ComponentVisitor;
 use crate::component_visitor_mut::ComponentVisitorMut;
 use crate::memo::Memo;
+use crate::rsx::Elements;
 use crate::state::State;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Component {
     type_name: Ident,
     pub states: Vec<State>,
     pub memos: Vec<Memo>,
+    pub rsx: Elements,
     fn_item: ItemFn,
 }
 
 impl ToTokens for Component {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        let body = &self.fn_item.block;
+        let body = &self.fn_item.block.stmts;
 
         let update_states = self
             .states
@@ -43,7 +45,12 @@ impl ToTokens for Component {
             .states
             .iter()
             .map(|state| state.type_def())
-            .chain(self.memos.iter().map(|memo| memo.type_def(self)));
+            .chain(self.memos.iter().map(|memo| memo.type_def(self)))
+            .chain(self.rsx.roots.iter().flat_map(|root| {
+                root.dynamic_nodes
+                    .iter()
+                    .map(|dyn_node| dyn_node.type_def())
+            }));
 
         let create_comp = self
             .states
@@ -63,6 +70,14 @@ impl ToTokens for Component {
                 quote! {
                     #name: #private
                 }
+            }))
+            .chain(self.rsx.roots.iter().flat_map(|root| {
+                root.dynamic_nodes.iter().map(|dyn_node| {
+                    let name = dyn_node.ident();
+                    quote! {
+                        #name
+                    }
+                })
             }));
 
         let ident_init = self
@@ -89,18 +104,18 @@ impl ToTokens for Component {
 
         tokens.extend(quote! {
             struct #comp_name {
-                #(#types,)*
                 tracking: DirtyTrackSet<u8, u8>,
+                #(#types,)*
             }
             impl #comp_name {
                 #(#update_states)*
             }
             let tracking: DirtyTrackSet<u8, u8> = DirtyTrackSet::default();
             #(#ident_init)*
-            #body
+            #(#body)*
             let mut comp = #comp_name {
-                #(#create_comp,)*
                 tracking,
+                #(#create_comp,)*
             };
         })
     }
@@ -143,6 +158,7 @@ impl Parse for Component {
             type_name,
             states: visitor.states,
             memos: visitor.memos,
+            rsx: visitor.rsx.expect("No return RSX found"),
             fn_item: parse_quote!(
                 fn placeholder() {}
             ),

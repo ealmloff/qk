@@ -11,7 +11,7 @@ use crate::component::Component;
 pub struct Memo {
     pub id: usize,
     pub ty: Type,
-    pub closure: Expr,
+    pub closure: Option<Expr>,
     pub capture: Option<Move>,
     pub subscriptions: HashSet<usize>,
     pub subscribers: HashSet<usize>,
@@ -40,7 +40,7 @@ impl Memo {
         let ty = &self.ty;
         let types = self.types(component);
         quote! {
-            Effect<dyn Fn(#types), #ty>
+            Effect<Box<dyn Fn(#types)>, #ty>
         }
     }
 
