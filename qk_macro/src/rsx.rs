@@ -1,6 +1,8 @@
 use std::str::FromStr;
 
 use crate::{
+    component::Component,
+    component_visitor::ComponentBuilder,
     format::{FormattedSegment, FormattedText, Segment},
     node::{
         self, update_dyn_nodes, DynElement, DynText, DynamicAttribute, DynamicNode,
@@ -10,7 +12,7 @@ use crate::{
 use proc_macro2::{Ident, TokenStream};
 use quote::{quote, ToTokens};
 use slotmap::{DefaultKey, Key, SlotMap};
-use syn::{parse::Parse, parse_quote, Expr, ExprLit, Lit};
+use syn::{parse::Parse, parse_quote, Expr, ExprLit, Lit, Stmt};
 use syn_rsx::{Node, NodeAttribute, NodeElement, NodeText, ParserConfig};
 
 #[derive(Debug)]
@@ -19,6 +21,7 @@ pub struct Elements {
     pub roots: Vec<Root>,
     creation: proc_macro2::TokenStream,
     current_path: Vec<TraverseOperation>,
+    memo_ids: Vec<usize>,
 }
 
 impl Parse for Elements {
@@ -48,6 +51,7 @@ impl Elements {
             creation: Default::default(),
             roots: Default::default(),
             current_path: Default::default(),
+            memo_ids: Default::default(),
         };
 
         for (idx, element) in elements.iter().enumerate() {
@@ -66,6 +70,35 @@ impl Elements {
         }
 
         myself
+    }
+
+    pub fn construct_memos(&mut self, builder: &mut ComponentBuilder) {
+        // Go through all dynamic nodes and create memos for them
+        for root in &mut self.roots {
+            for dyn_node in &mut root.dynamic_nodes {
+                if let Some(update) = dyn_node.update() {
+                    let memo_id = builder.memo(None, update, Some(parse_quote! { move }));
+                    self.memo_ids.push(memo_id);
+                }
+            }
+        }
+    }
+
+    pub fn update_memos(&self, comp: &Component) -> Stmt {
+        let mut update = TokenStream::new();
+
+        for memo_id in &self.memo_ids {
+            let memo = &comp.memos[*memo_id].construct(comp);
+            update.extend(quote! {
+                #memo
+            });
+        }
+
+        parse_quote! {
+            {
+                #update
+            }
+        }
     }
 
     fn get_template_fn(&self) -> TokenStream {

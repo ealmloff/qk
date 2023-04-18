@@ -3,9 +3,9 @@ use quote::{quote, ToTokens};
 use syn::parse::Parse;
 use syn::visit::Visit;
 use syn::visit_mut::VisitMut;
-use syn::{parse_quote, ItemFn};
+use syn::ItemFn;
 
-use crate::component_visitor::ComponentVisitor;
+use crate::component_visitor::ComponentBuilder;
 use crate::component_visitor_mut::ComponentVisitorMut;
 use crate::memo::Memo;
 use crate::rsx::Elements;
@@ -13,11 +13,11 @@ use crate::state::State;
 
 #[derive(Debug)]
 pub struct Component {
-    type_name: Ident,
+    pub type_name: Ident,
     pub states: Vec<State>,
     pub memos: Vec<Memo>,
     pub rsx: Elements,
-    fn_item: ItemFn,
+    pub fn_item: ItemFn,
 }
 
 impl ToTokens for Component {
@@ -100,6 +100,15 @@ impl ToTokens for Component {
                 quote! {
                     let mut #private: #ty;
                 }
+            }))
+            .chain(self.rsx.roots.iter().flat_map(|root| {
+                root.dynamic_nodes.iter().map(|dyn_node| {
+                    let name = dyn_node.ident();
+
+                    quote! {
+                        let mut #name: u32;
+                    }
+                })
             }));
 
         tokens.extend(quote! {
@@ -126,43 +135,18 @@ impl Parse for Component {
         let mut f = input.parse::<syn::ItemFn>()?;
         let type_name = f.sig.ident.clone();
 
-        let mut visitor = ComponentVisitor::default();
+        let mut visitor = ComponentBuilder {
+            states: Default::default(),
+            memos: Default::default(),
+            rsx: None,
+            fn_item: f.clone(),
+            type_name,
+            in_reactive: false,
+        };
 
         visitor.visit_item_fn(&f);
 
-        // Resolve subscribers
-        let memos = &mut visitor.memos;
-        let states = &mut visitor.states;
-        for i in 0..memos.len() {
-            let memo = &memos[i];
-            let mut subscribers = Vec::new();
-            for other in memos.iter() {
-                if other.subscriptions.contains(&memo.id) {
-                    subscribers.push(memo.id);
-                }
-            }
-            memos[i].subscribers = subscribers.into_iter().collect();
-        }
-
-        for state in states {
-            let mut subscribers = Vec::new();
-            for other in memos.iter() {
-                if other.subscriptions.contains(&state.id) {
-                    subscribers.push(other.id);
-                }
-            }
-            state.subscribers = subscribers.into_iter().collect();
-        }
-
-        let mut myself = Self {
-            type_name,
-            states: visitor.states,
-            memos: visitor.memos,
-            rsx: visitor.rsx.expect("No return RSX found"),
-            fn_item: parse_quote!(
-                fn placeholder() {}
-            ),
-        };
+        let mut myself = visitor.build();
 
         ComponentVisitorMut {
             component: &myself,

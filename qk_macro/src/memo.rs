@@ -77,7 +77,7 @@ impl Memo {
             let name = &state.name;
             let ty = &state.ty;
             parameters.push(quote! {
-                #name: RwTrack<#ty, u8, u8>,
+                mut #name: RwTrack<#ty, u8, u8>,
             });
         }
         quote! {
@@ -140,6 +140,7 @@ impl Memo {
                 let #name = #tracked;
             }
         });
+
         let subscriptions: Vec<_> = self
             .subscriptions
             .iter()

@@ -1,6 +1,6 @@
 use crate::component::Component;
 use syn::visit_mut::{self, VisitMut};
-use syn::{Expr, Type};
+use syn::{parse_quote, Expr, Type};
 use syn::{ExprPath, Pat, PathArguments, PathSegment};
 
 pub struct ComponentVisitorMut<'a> {
@@ -13,8 +13,15 @@ impl VisitMut for ComponentVisitorMut<'_> {
     fn visit_stmt_mut(&mut self, i: &mut syn::Stmt) {
         let mut memo = None;
         let mut state = None;
+        let mut rsx = None;
 
         match i {
+            syn::Stmt::Item(syn::Item::Macro(i)) => {
+                // self.component.rsx.update_memos(&self.component);
+                if i.mac.path.is_ident("rsx") {
+                    rsx = Some(i.clone());
+                }
+            }
             syn::Stmt::Local(i) => {
                 if let Pat::Type(pat_ty) = &i.pat {
                     if let Type::Path(path) = &*pat_ty.ty {
@@ -62,8 +69,16 @@ impl VisitMut for ComponentVisitorMut<'_> {
             *i = memo.construct(self.component);
         } else if let Some(state) = state {
             *i = state.construct();
+        } else if let Some(rsx) = rsx {
+            let update = self.component.rsx.update_memos(self.component);
+            *i = parse_quote! {
+                {
+                    #rsx
+                    #update
+                }
+            };
+        } else {
+            visit_mut::visit_stmt_mut(self, i);
         }
-
-        visit_mut::visit_stmt_mut(self, i);
     }
 }

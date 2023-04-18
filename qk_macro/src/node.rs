@@ -1,6 +1,6 @@
 use proc_macro2::{Ident, TokenStream};
 use quote::{quote, ToTokens};
-use syn::Expr;
+use syn::{parse_quote, Expr};
 use syn_rsx::NodeValueExpr;
 
 use crate::format::FormattedText;
@@ -31,10 +31,14 @@ impl DynamicNode {
         }
     }
 
-    pub fn update(&self) -> TokenStream {
+    pub fn update(&self) -> Option<Expr> {
         let id = self.ident();
         match &self.node {
             DynamicNodeType::Element(element) => {
+                if element.attributes.is_empty() {
+                    return None;
+                }
+
                 let attributes = element.attributes.iter().map(|attribute| {
                     let key = &attribute.key;
                     let value = &attribute.value;
@@ -50,15 +54,19 @@ impl DynamicNode {
                     }
                 });
 
-                quote! {
-                    #(#attributes)*
-                }
+                Some(parse_quote! {
+                    {
+                        #(#attributes)*
+                    }
+                })
             }
             DynamicNodeType::Text(text) => {
                 let text = &text.text;
-                quote! {
-                    ui.set_text(#id, &#text);
-                }
+                Some(parse_quote! {
+                    {
+                        ui.set_text(#id, &#text);
+                    }
+                })
             }
             DynamicNodeType::Fragment(_) => {
                 todo!()
@@ -235,7 +243,7 @@ pub fn update_dyn_nodes(roots: &[Root]) -> proc_macro2::TokenStream {
         // initialize all the variables
         #(
             #(
-                let #ids = ui.node();
+                #ids = ui.node();
             )*
         )*
 

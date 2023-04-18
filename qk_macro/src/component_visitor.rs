@@ -1,25 +1,115 @@
+use crate::component::Component;
 use crate::memo::Memo;
 use crate::rsx::Elements;
 use crate::state::State;
 use proc_macro2::Ident;
 use quote::ToTokens;
-use std::collections::HashSet;
 use syn::visit::{self, Visit};
-use syn::{parse2, Expr, Type};
+use syn::ItemFn;
+use syn::{parse2, Expr, Token, Type};
 use syn::{ExprPath, Pat, PathArguments, PathSegment, TypeTuple};
 
-#[derive(Default, Debug)]
-pub struct ComponentVisitor {
+#[derive(Debug)]
+pub struct ComponentBuilder {
     pub states: Vec<State>,
     pub memos: Vec<Memo>,
     pub rsx: Option<Elements>,
-    in_reactive: bool,
+    pub fn_item: ItemFn,
+    pub type_name: Ident,
+    pub in_reactive: bool,
 }
 
-impl Visit<'_> for ComponentVisitor {
+impl ComponentBuilder {
+    pub fn state(&mut self, name: Ident, ty: Type, expr: Expr) {
+        self.states.push(State {
+            id: self.states.len(),
+            name,
+            ty,
+            expr,
+            subscribers: Default::default(),
+        })
+    }
+
+    pub fn memo(
+        &mut self,
+        ty: Option<Type>,
+        closure: Expr,
+        capture: Option<Token![move]>,
+    ) -> usize {
+        let ty = ty.unwrap_or(Type::Tuple(TypeTuple {
+            paren_token: Default::default(),
+            elems: Default::default(),
+        }));
+
+        let mut visitor = SubscriptionVisitor {
+            states: &self.states,
+            subscribed: Default::default(),
+        };
+        visitor.visit_expr(&closure);
+
+        let id = self.memos.len();
+        self.memos.push(Memo {
+            id,
+            ty,
+            closure: Some(closure),
+            capture,
+            subscriptions: visitor.subscribed.into_iter().collect(),
+            subscribers: Default::default(),
+        });
+
+        id
+    }
+
+    pub fn build(self) -> Component {
+        let Self {
+            mut states,
+            mut memos,
+            rsx,
+            in_reactive,
+            fn_item,
+            type_name,
+        } = self;
+        let rsx = rsx.expect("rsx macro is required");
+
+        // Resolve subscribers
+        for i in 0..memos.len() {
+            let memo = &memos[i];
+            let mut subscribers = Vec::new();
+            for other in memos.iter() {
+                if other.subscriptions.contains(&memo.id) {
+                    subscribers.push(memo.id);
+                }
+            }
+            memos[i].subscribers = subscribers.into_iter().collect();
+        }
+
+        for state in &mut states {
+            let mut subscribers = Vec::new();
+            for other in memos.iter() {
+                if other.subscriptions.contains(&state.id) {
+                    subscribers.push(other.id);
+                }
+            }
+            state.subscribers = subscribers.into_iter().collect();
+        }
+
+        Component {
+            type_name,
+            states,
+            memos,
+            rsx,
+            fn_item,
+        }
+    }
+}
+
+impl Visit<'_> for ComponentBuilder {
     fn visit_macro(&mut self, mac: &syn::Macro) {
-        if dbg!(mac.path.to_token_stream().to_string()) == "rsx" {
-            self.rsx = parse2(mac.tokens.clone()).ok();
+        if mac.path.to_token_stream().to_string() == "rsx" {
+            if let Ok(mut rsx) = parse2::<Elements>(mac.tokens.clone()) {
+                rsx.construct_memos(self);
+                self.rsx = Some(rsx);
+            }
         }
     }
 
@@ -28,29 +118,11 @@ impl Visit<'_> for ComponentVisitor {
             if let Some(fn_name) = path.get_ident() {
                 if fn_name == "rx" {
                     assert!(!self.in_reactive, "nested reactivity is not supported");
-                    let mut visitor = SubscriptionVisitor {
-                        states: &self.states,
-                        subscribed: Default::default(),
-                    };
-                    visitor.visit_expr_call(i);
 
                     if let Some(Expr::Closure(closure)) = i.args.first().cloned() {
-                        let closure_body = closure.body;
-                        let capture = closure.capture;
-                        let memo = Memo {
-                            id: self.memos.len(),
-                            ty: Type::Tuple(TypeTuple {
-                                paren_token: Default::default(),
-                                elems: Default::default(),
-                            }),
-                            closure: Some(*closure_body),
-                            capture,
-                            subscriptions: visitor.subscribed.into_iter().collect(),
-                            subscribers: HashSet::new(),
-                        };
+                        self.memo(None, *closure.body, closure.capture);
 
                         self.in_reactive = true;
-                        self.memos.push(memo);
                         visit::visit_expr_call(self, i);
                         self.in_reactive = false;
                         return;
@@ -75,16 +147,13 @@ impl Visit<'_> for ComponentVisitor {
                         if let Some(syn::GenericArgument::Type(ty)) = ty.args.first() {
                             if let Pat::Ident(name) = &*pat_ty.pat {
                                 assert!(!self.in_reactive, "nested reactivity is not supported");
-                                let state = State {
-                                    id: self.states.len(),
-                                    name: name.ident.clone(),
-                                    ty: ty.clone(),
-                                    expr: *i.init.as_ref().unwrap().1.clone(),
-                                    subscribers: Default::default(),
-                                };
+                                self.state(
+                                    name.ident.clone(),
+                                    ty.clone(),
+                                    *i.init.as_ref().unwrap().1.clone(),
+                                );
 
                                 self.in_reactive = true;
-                                self.states.push(state);
                                 visit::visit_local(self, i);
                                 self.in_reactive = false;
                                 return;
