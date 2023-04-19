@@ -111,12 +111,23 @@ impl ToTokens for Component {
                 })
             }));
 
+        let roots = self.rsx.roots.iter().map(|root| {
+            let name = root.root_ident();
+            quote! {
+                #name
+            }
+        });
+
         tokens.extend(quote! {
             struct #comp_name {
                 tracking: DirtyTrackSet<u8, u8>,
+                ui: qk::copy::State<WebRenderer>,
                 #(#types,)*
             }
             impl #comp_name {
+                fn roots(&self) -> Vec<u32> {
+                    vec![#(self.#roots,)*]
+                }
                 #(#update_states)*
             }
             let tracking: DirtyTrackSet<u8, u8> = DirtyTrackSet::default();
@@ -124,6 +135,7 @@ impl ToTokens for Component {
             #(#body)*
             let mut comp = #comp_name {
                 tracking,
+                ui,
                 #(#create_comp,)*
             };
         })

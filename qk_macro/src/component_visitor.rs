@@ -35,6 +35,7 @@ impl ComponentBuilder {
         ty: Option<Type>,
         closure: Expr,
         capture: Option<Token![move]>,
+        raw_params: Vec<(Ident, Type)>,
     ) -> usize {
         let ty = ty.unwrap_or(Type::Tuple(TypeTuple {
             paren_token: Default::default(),
@@ -55,6 +56,7 @@ impl ComponentBuilder {
             capture,
             subscriptions: visitor.subscribed.into_iter().collect(),
             subscribers: Default::default(),
+            raw_params,
         });
 
         id
@@ -65,9 +67,9 @@ impl ComponentBuilder {
             mut states,
             mut memos,
             rsx,
-            in_reactive,
             fn_item,
             type_name,
+            ..
         } = self;
         let rsx = rsx.expect("rsx macro is required");
 
@@ -120,7 +122,7 @@ impl Visit<'_> for ComponentBuilder {
                     assert!(!self.in_reactive, "nested reactivity is not supported");
 
                     if let Some(Expr::Closure(closure)) = i.args.first().cloned() {
-                        self.memo(None, *closure.body, closure.capture);
+                        self.memo(None, *closure.body, closure.capture, Default::default());
 
                         self.in_reactive = true;
                         visit::visit_expr_call(self, i);

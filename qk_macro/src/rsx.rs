@@ -77,7 +77,12 @@ impl Elements {
         for root in &mut self.roots {
             for dyn_node in &mut root.dynamic_nodes {
                 if let Some(update) = dyn_node.update() {
-                    let memo_id = builder.memo(None, update, Some(parse_quote! { move }));
+                    let memo_id = builder.memo(
+                        None,
+                        update,
+                        Some(parse_quote! { move }),
+                        vec![(parse_quote!(ui), parse_quote!(qk::copy::State<WebRenderer>))],
+                    );
                     self.memo_ids.push(memo_id);
                 }
             }
@@ -311,7 +316,7 @@ pub struct Root {
 }
 
 impl Root {
-    fn root_ident(&self) -> proc_macro2::Ident {
+    pub fn root_ident(&self) -> proc_macro2::Ident {
         self.dynamic_nodes
             .iter()
             .find(|n| n.path.is_empty())

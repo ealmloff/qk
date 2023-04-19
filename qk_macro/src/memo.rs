@@ -15,6 +15,7 @@ pub struct Memo {
     pub capture: Option<Move>,
     pub subscriptions: HashSet<usize>,
     pub subscribers: HashSet<usize>,
+    pub raw_params: Vec<(Ident, Type)>,
 }
 
 impl std::fmt::Debug for Memo {
@@ -64,6 +65,11 @@ impl Memo {
                 #ty
             });
         }
+        for (_, ty) in &self.raw_params {
+            parameters.push(quote! {
+                #ty
+            });
+        }
         quote! {
             #(#parameters)*
         }
@@ -80,6 +86,11 @@ impl Memo {
                 mut #name: RwTrack<#ty, u8, u8>,
             });
         }
+        for (r, ty) in &self.raw_params {
+            parameters.push(quote! {
+                mut #r: #ty,
+            });
+        }
         quote! {
             #(#parameters)*
         }
@@ -93,7 +104,11 @@ impl Memo {
         let parameters = self.parameters(component);
         let types = self.types(component);
 
-        let subscribers = self.subscriptions.iter().map(|id| states[*id].name.clone());
+        let subscribers = self
+            .subscriptions
+            .iter()
+            .map(|id| states[*id].name.clone())
+            .chain(self.raw_params.iter().map(|(r, _)| r).cloned());
         let ty = &self.ty;
 
         let rw_tracks = self
@@ -133,18 +148,27 @@ impl Memo {
             proc_macro2::Span::call_site(),
         );
 
-        let subscriptions_setup = self.subscriptions.iter().map(|id| {
-            let tracked = states[*id].tracked();
-            let name = &states[*id].name;
-            quote! {
-                let #name = #tracked;
-            }
-        });
+        let subscriptions_setup = self
+            .subscriptions
+            .iter()
+            .map(|id| {
+                let tracked = states[*id].tracked();
+                let name = &states[*id].name;
+                quote! {
+                    let #name = #tracked;
+                }
+            })
+            .chain(self.raw_params.iter().map(|(name, _)| {
+                quote! {
+                    let #name = self.#name;
+                }
+            }));
 
         let subscriptions: Vec<_> = self
             .subscriptions
             .iter()
             .map(|id| states[*id].name.clone())
+            .chain(self.raw_params.iter().map(|(r, _)| r).cloned())
             .collect();
 
         let subscriptions_update = self.subscriptions.iter().map(|id| states[*id].update_fn());
