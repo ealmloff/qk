@@ -1,5 +1,6 @@
 use num_traits::PrimInt;
 use std::cell::Cell;
+use std::fmt::{Debug, Display};
 use std::ops::{Deref, DerefMut};
 
 #[derive(Default)]
@@ -61,6 +62,18 @@ impl<R: PrimInt, W: PrimInt> DirtyTrack<'_, R, W> {
 pub struct RwTrack<'a, T, R, W> {
     pub data: &'a mut T,
     pub tracking: DirtyTrack<'a, R, W>,
+}
+
+impl<T: Display, R: PrimInt, W: PrimInt> Display for RwTrack<'_, T, R, W> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.deref())
+    }
+}
+
+impl<T: Debug, R: PrimInt, W: PrimInt> Debug for RwTrack<'_, T, R, W> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self.deref())
+    }
 }
 
 impl<T, R: PrimInt, W: PrimInt> Deref for RwTrack<'_, T, R, W> {

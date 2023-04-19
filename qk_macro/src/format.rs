@@ -111,9 +111,22 @@ impl ToTokens for FormattedText {
         }
 
         let segment = dynamic_segments.iter();
+        let temps: Vec<_> = dynamic_segments
+            .iter()
+            .enumerate()
+            .map(|(i, _)| {
+                let i = i as u32;
+                Ident::new(&format!("__temp_{i}"), Span::call_site())
+            })
+            .collect();
 
         let generated = quote! {
-            format!(#format_literal #(, #segment)*)
+            {
+                #(
+                    let #temps = #segment;
+                )*
+                format!(#format_literal #(, #temps)*)
+            }
         };
         generated.to_tokens(tokens)
     }
