@@ -123,7 +123,7 @@ impl ToTokens for FormattedText {
         let generated = quote! {
             {
                 #(
-                    let #temps = #segment;
+                    let #temps = &(#segment);
                 )*
                 format!(#format_literal #(, #temps)*)
             }

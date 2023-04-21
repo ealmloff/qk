@@ -122,7 +122,16 @@ macro_rules! hyristic2 {
     };
 }
 
+#[cfg(not(feature = "heuristics"))]
+#[macro_export]
+macro_rules! scope {
+    ($runtime:expr) => {{
+        $crate::copy::Scope::new($runtime)
+    }};
+}
+
 #[cfg(feature = "bump")]
+#[cfg(feature = "heuristics")]
 #[macro_export]
 macro_rules! scope {
     ($runtime:expr) => {{
@@ -133,6 +142,7 @@ macro_rules! scope {
 }
 
 #[cfg(not(feature = "bump"))]
+#[cfg(feature = "heuristics")]
 #[macro_export]
 macro_rules! scope {
     ($runtime:expr) => {{
@@ -141,7 +151,16 @@ macro_rules! scope {
     }};
 }
 
+#[cfg(not(feature = "heuristics"))]
+#[macro_export]
+macro_rules! child_scope {
+    ($scope:expr, $closure:expr) => {{
+        $scope.child($closure)
+    }};
+}
+
 #[cfg(feature = "bump")]
+#[cfg(feature = "heuristics")]
 #[macro_export]
 macro_rules! child_scope {
     ($scope:expr, $closure:expr) => {{
@@ -152,6 +171,7 @@ macro_rules! child_scope {
 }
 
 #[cfg(not(feature = "bump"))]
+#[cfg(feature = "heuristics")]
 #[macro_export]
 macro_rules! child_scope {
     ($scope:expr, $closure:expr) => {{
@@ -176,15 +196,29 @@ pub struct Scope {
     children: RefCell<Option<Vec<Scope>>>,
     runtime: RuntimeId,
     owns: RefCell<Vec<NodeRef>>,
+    #[cfg(feature = "heuristics")]
     update_owned: fn(usize),
-    #[cfg(feature = "bump")]
+    #[cfg(all(feature = "bump", feature = "heuristics"))]
     update: fn(usize),
     #[cfg(feature = "bump")]
     allocator: bumpalo::Bump,
 }
 
 impl Scope {
+    #[cfg(not(feature = "heuristics"))]
+    pub fn new(runtime: RuntimeId) -> Self {
+        Self {
+            parent: None,
+            children: Default::default(),
+            runtime,
+            owns: RefCell::new(Vec::new()),
+            #[cfg(feature = "bump")]
+            allocator: bumpalo::Bump::new(),
+        }
+    }
+
     #[cfg(feature = "bump")]
+    #[cfg(feature = "heuristics")]
     pub fn new<H: ScopeHyristics, H2: ScopeHyristicsOwned>(runtime: RuntimeId) -> Self {
         Self {
             parent: None,
@@ -200,6 +234,7 @@ impl Scope {
     }
 
     #[cfg(not(feature = "bump"))]
+    #[cfg(feature = "heuristics")]
     pub fn new<H: ScopeHyristicsOwned>(runtime: RuntimeId) -> Self {
         Self {
             parent: None,
@@ -210,7 +245,26 @@ impl Scope {
         }
     }
 
+    #[cfg(not(feature = "heuristics"))]
+    pub fn child<O>(&self, f: impl FnOnce(&Scope) -> O) -> O {
+        let scope = Self {
+            parent: Some(self.runtime),
+            children: Default::default(),
+            runtime: self.runtime,
+            owns: RefCell::new(Vec::new()),
+            #[cfg(feature = "bump")]
+            allocator: bumpalo::Bump::new(),
+        };
+        let r = f(&scope);
+        self.children
+            .borrow_mut()
+            .get_or_insert(Default::default())
+            .push(scope);
+        r
+    }
+
     #[cfg(feature = "bump")]
+    #[cfg(feature = "heuristics")]
     pub fn child<H: ScopeHyristics, H2: ScopeHyristicsOwned, O>(
         &self,
         f: impl FnOnce(&Scope) -> O,
@@ -235,6 +289,7 @@ impl Scope {
     }
 
     #[cfg(not(feature = "bump"))]
+    #[cfg(feature = "heuristics")]
     pub fn child<H: ScopeHyristicsOwned, O>(&self, f: impl FnOnce(&Scope) -> O) -> O {
         let scope = Self {
             parent: Some(self.runtime),
@@ -318,8 +373,11 @@ impl Drop for Scope {
             let new_guess = self.allocator.allocated_bytes();
             (self.update)(new_guess);
         }
-        let new_guess = self.owns.borrow().len();
-        (self.update_owned)(new_guess);
+        #[cfg(feature = "heuristics")]
+        {
+            let new_guess = self.owns.borrow().len();
+            (self.update_owned)(new_guess);
+        }
     }
 }
 

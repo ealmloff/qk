@@ -33,11 +33,13 @@ impl ToTokens for Component {
                     #update
                 }
             })
-            .chain(self.memos.iter().map(|memo| {
-                let update = memo.update(self);
-                quote! {
-                    #update
-                }
+            .chain(self.memos.iter().filter_map(|memo| {
+                (!memo.runs_once()).then(|| {
+                    let update = memo.update(self);
+                    quote! {
+                        #update
+                    }
+                })
             }));
 
         let comp_name = &self.type_name;
@@ -45,7 +47,11 @@ impl ToTokens for Component {
             .states
             .iter()
             .map(|state| state.type_def())
-            .chain(self.memos.iter().map(|memo| memo.type_def(self)))
+            .chain(
+                self.memos
+                    .iter()
+                    .filter_map(|memo| (!memo.runs_once()).then(|| memo.type_def(self))),
+            )
             .chain(self.rsx.roots.iter().flat_map(|root| {
                 root.dynamic_nodes
                     .iter()
@@ -63,13 +69,15 @@ impl ToTokens for Component {
                     #name: #private
                 }
             })
-            .chain(self.memos.iter().map(|memo| {
-                let name = memo.ident();
-                let private = Ident::new(&format!("__{name}"), name.span());
+            .chain(self.memos.iter().filter_map(|memo| {
+                (!memo.runs_once()).then(|| {
+                    let name = memo.ident();
+                    let private = Ident::new(&format!("__{name}"), name.span());
 
-                quote! {
-                    #name: #private
-                }
+                    quote! {
+                        #name: #private
+                    }
+                })
             }))
             .chain(self.rsx.roots.iter().flat_map(|root| {
                 root.dynamic_nodes.iter().map(|dyn_node| {
@@ -92,14 +100,16 @@ impl ToTokens for Component {
                     let mut #private: #ty;
                 }
             })
-            .chain(self.memos.iter().map(|memo| {
-                let name = memo.ident();
-                let private = Ident::new(&format!("__{name}"), name.span());
-                let ty = memo.ty(self);
+            .chain(self.memos.iter().filter_map(|memo| {
+                (!memo.runs_once()).then(|| {
+                    let name = memo.ident();
+                    let private = Ident::new(&format!("__{name}"), name.span());
+                    let ty = memo.ty(self);
 
-                quote! {
-                    let mut #private: #ty;
-                }
+                    quote! {
+                        let mut #private: #ty;
+                    }
+                })
             }))
             .chain(self.rsx.roots.iter().flat_map(|root| {
                 root.dynamic_nodes.iter().map(|dyn_node| {

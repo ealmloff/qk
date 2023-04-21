@@ -28,3 +28,4 @@ qk_macro = { path = "qk_macro" }
 default = []
 ssr = ["slotmap"]
 bump = ["bumpalo"]
+heuristics = []

@@ -37,6 +37,10 @@ impl std::fmt::Debug for Memo {
 }
 
 impl Memo {
+    pub fn runs_once(&self) -> bool {
+        self.subscribers.is_empty()
+    }
+
     pub fn ty(&self, component: &Component) -> TokenStream {
         let ty = &self.ty;
         let types = self.types(component);
@@ -97,6 +101,11 @@ impl Memo {
     }
 
     pub fn construct(&self, component: &Component) -> Stmt {
+        if self.runs_once() {
+            let closure = &self.closure;
+            return parse_quote!(#closure);
+        }
+
         let states = &component.states;
         let ident_name = self.ident();
         let closure = &self.closure;
@@ -185,9 +194,9 @@ impl Memo {
                         #subscriptions,
                     )*
                 );
-                if old != self.#ident_name.current {
-                    todo!("handle memo returns");
-                }
+                // if old != self.#ident_name.current {
+                //     todo!("handle memo returns");
+                // }
                 #( self.#subscriptions_update(); )*
             }
         }
