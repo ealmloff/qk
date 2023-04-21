@@ -106,7 +106,7 @@ impl ToTokens for Component {
                     let name = dyn_node.ident();
 
                     quote! {
-                        let mut #name: u32;
+                        let mut #name: u32 = 0;
                     }
                 })
             }));

@@ -232,26 +232,26 @@ pub fn update_dyn_nodes(roots: &[Root]) -> proc_macro2::TokenStream {
             .map(|(idx, _)| ids[i][idx].clone())
             .unwrap();
 
-        let idx = syn::Index::from(i);
-
         quote! {
-            ui.clone_node(tmpl.#idx, #root_name);
+            ui.clone_node(unsafe{tmpl.get_unchecked(#i).load(std::sync::atomic::Ordering::Relaxed)}, #root_name);
         }
     });
 
     quote! {
-        // initialize all the variables
-        #(
+        ui.with_mut(|ui| {
+            // initialize all the variables
             #(
-                #ids = ui.node();
+                #(
+                    #ids = ui.node();
+                )*
             )*
-        )*
 
-        // create the root
-        let tmpl = get_template(ui);
-        #(#clone_nodes)*
+            // create the root
+            let tmpl = get_template(&mut *ui);
+            #(#clone_nodes)*
 
-        // traverse the tree
-        #(#traverse_roots)*
+            // traverse the tree
+            #(#traverse_roots)*
+        })
     }
 }

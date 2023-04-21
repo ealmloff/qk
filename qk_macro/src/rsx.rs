@@ -115,16 +115,27 @@ impl Elements {
             .map(|root| root.root_name.as_ref().unwrap())
             .collect();
 
-        let return_type: Vec<_> = roots.iter().map(|_| quote! { u32 }).collect();
+        let arr_len = roots.len();
+
+        let tuple_idxs: Vec<_> = (0..roots.len()).collect();
+
+        let create_arr = (0..roots.len()).map(|_| quote! { std::sync::atomic::AtomicU32::new(0) });
 
         quote! {
-            fn get_template<P: PlatformEvents>(mut ui: impl qk::prelude::Renderer<P>) -> (#(#return_type,)*) {
-                static TEMPLATE: once_cell::sync::OnceCell<(#(#return_type,)*)> = once_cell::sync::OnceCell::new();
-                let (#(#return_roots,)*) = TEMPLATE.get_or_init(|| {
+            fn get_template<P: PlatformEvents>(mut ui: impl qk::prelude::Renderer<P>) -> &'static [std::sync::atomic::AtomicU32; #arr_len] {
+                static TEMPLATE: [std::sync::atomic::AtomicU32; #arr_len] = [#(#create_arr,)*];
+
+                if unsafe{TEMPLATE.get_unchecked(0)}.load(std::sync::atomic::Ordering::Relaxed) == 0 {
                     #creation
-                    (#(#return_roots,)*)
-                });
-                (#(*#return_roots,)*)
+                    // Safety: Checked index at compile time
+                    unsafe {
+                        #(
+                            TEMPLATE.get_unchecked(#tuple_idxs).store(#return_roots, std::sync::atomic::Ordering::Relaxed);
+                        )*
+                    }
+                }
+
+                &TEMPLATE
             }
         }
     }

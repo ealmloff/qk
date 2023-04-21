@@ -173,15 +173,11 @@ mod js {
         fn get_handler_id(id: u32, event_id: usize) -> Option<u32>;
     }
 
-    fn create_element(id: u32, name: &'static str<u8, name_cache>) {
+    fn create_element(id: u32, name: &'static str<u8>) {
         r#"nodes[$id$]=document.createElement($name$);"#
     }
 
-    fn create_element_ns(
-        id: u32,
-        name: &'static str<u8, name_cache>,
-        ns: &'static str<u8, ns_cache>,
-    ) {
+    fn create_element_ns(id: u32, name: &'static str<u8>, ns: &'static str<u8>) {
         "nodes[$id$]=document.createElementNS($ns$,$name$);"
     }
 
@@ -189,15 +185,15 @@ mod js {
         "nodes[$id$]=document.createTextNode($text$);"
     }
 
-    fn set_style(id: u32, name: &'static str<u8, name_cache>, val: &str) {
+    fn set_style(id: u32, name: &'static str<u8>, val: &str) {
         "nodes[$id$].style[$name$]=$val$;"
     }
 
-    fn set_attribute(id: u32, name: &'static str<u8, name_cache>, val: &str) {
+    fn set_attribute(id: u32, name: &'static str<u8>, val: &str) {
         "nodes[$id$].setAttribute($name$,$val$);"
     }
 
-    fn remove_attribute(id: u32, name: &'static str<u8, name_cache>) {
+    fn remove_attribute(id: u32, name: &'static str<u8>) {
         "nodes[$id$].removeAttribute($name$);"
     }
 
@@ -206,7 +202,7 @@ mod js {
     }
 
     fn set_text(id: u32, text: &str) {
-        "nodes[id].textContent=$text$;"
+        "nodes[$id$].textContent=$text$;"
     }
 
     fn remove(id: u32) {
@@ -230,7 +226,7 @@ mod js {
     }
 
     fn copy(id: u32, id2: u32) {
-        "nodes[id2]=nodes[id];"
+        "nodes[$id2$]=nodes[$id$];"
     }
 
     fn add_listener(id: u32, event_id: u16, handler_id: u16) {
