@@ -38,7 +38,7 @@ impl std::fmt::Debug for Memo {
 
 impl Memo {
     pub fn runs_once(&self) -> bool {
-        self.subscribers.is_empty()
+        self.subscriptions.is_empty()
     }
 
     pub fn ty(&self, component: &Component) -> TokenStream {
