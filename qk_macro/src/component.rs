@@ -8,6 +8,7 @@ use syn::ItemFn;
 use crate::component_visitor::ComponentBuilder;
 use crate::component_visitor_mut::ComponentVisitorMut;
 use crate::memo::Memo;
+use crate::prop::Prop;
 use crate::rsx::Elements;
 use crate::state::State;
 
@@ -18,6 +19,36 @@ pub struct Component {
     pub memos: Vec<Memo>,
     pub rsx: Elements,
     pub fn_item: ItemFn,
+    pub prop_items: Vec<Prop>,
+}
+
+impl Component {
+    fn prop_name(&self) -> Ident {
+        Ident::new(&format!("{}", self.type_name), self.type_name.span())
+    }
+
+    fn props_struct(&self) -> TokenStream {
+        let struct_name = self.prop_name();
+
+        let fields = self.prop_items.iter().map(|state| {
+            let name = &state.name;
+            let ty = &state.ty;
+
+            quote! {
+                #name: #ty
+            }
+        });
+
+        quote! {
+            struct #struct_name {
+                #(#fields,)*
+            }
+        }
+    }
+
+    fn comp_name(&self) -> Ident {
+        Ident::new(&format!("{}State", self.type_name), self.type_name.span())
+    }
 }
 
 impl ToTokens for Component {
@@ -42,7 +73,7 @@ impl ToTokens for Component {
                 })
             }));
 
-        let comp_name = &self.type_name;
+        let comp_name = self.comp_name();
         let types = self
             .states
             .iter()
@@ -128,26 +159,43 @@ impl ToTokens for Component {
             }
         });
 
+        let prop_name = self.prop_name();
+        let props_struct = self.props_struct();
+
         tokens.extend(quote! {
-            struct #comp_name {
+            #props_struct
+
+            struct #comp_name<R: qk::renderer::Renderer<R> + qk::events::PlatformEvents> {
                 tracking: DirtyTrackSet<u8, u8>,
-                ui: qk::copy::State<WebRenderer>,
+                ui: R,
                 #(#types,)*
             }
-            impl #comp_name {
+            impl<R: qk::renderer::Renderer<R> + qk::events::PlatformEvents> #comp_name<R> {
+                #(#update_states)*
+            }
+
+            impl<R: qk::renderer::Renderer<R> + qk::events::PlatformEvents + Clone> qk::component::Component<R, R> for #prop_name {
+                type State = #comp_name<R>;
+                
+                fn create(mut ui: R, props: Self) -> Self::State {
+                    let tracking: DirtyTrackSet<u8, u8> = DirtyTrackSet::default();
+                    let ui = &mut ui;
+                    #(#ident_init)*
+                    #(#body)*
+                    let mut comp = #comp_name {
+                        tracking,
+                        ui: ui.clone(),
+                        #(#create_comp,)*
+                    };
+                    comp
+                }
+            }
+
+            impl<R: qk::renderer::Renderer<R> + qk::events::PlatformEvents> qk::component::ComponentState<R, R> for #comp_name<R> {
                 fn roots(&self) -> Vec<u32> {
                     vec![#(self.#roots,)*]
                 }
-                #(#update_states)*
             }
-            let tracking: DirtyTrackSet<u8, u8> = DirtyTrackSet::default();
-            #(#ident_init)*
-            #(#body)*
-            let mut comp = #comp_name {
-                tracking,
-                ui,
-                #(#create_comp,)*
-            };
         })
     }
 }

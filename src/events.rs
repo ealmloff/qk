@@ -38,6 +38,36 @@ pub trait PlatformEvents {
     type ProgressEvent;
 }
 
+impl<'a, P: PlatformEvents> PlatformEvents for &'a mut P {
+    type AnimationEvent = P::AnimationEvent;
+    type BeforeUnloadEvent = P::BeforeUnloadEvent;
+    type CompositionEvent = P::CompositionEvent;
+    type DeviceMotionEvent = P::DeviceMotionEvent;
+    type DeviceOrientationEvent = P::DeviceOrientationEvent;
+    type DragEvent = P::DragEvent;
+    type ErrorEvent = P::ErrorEvent;
+    type Event = P::Event;
+    type FocusEvent = P::FocusEvent;
+    type GamepadEvent = P::GamepadEvent;
+    type HashChangeEvent = P::HashChangeEvent;
+    type InputEvent = P::InputEvent;
+    type KeyboardEvent = P::KeyboardEvent;
+    type MessageEvent = P::MessageEvent;
+    type MouseEvent = P::MouseEvent;
+    type PageTransitionEvent = P::PageTransitionEvent;
+    type PointerEvent = P::PointerEvent;
+    type PopStateEvent = P::PopStateEvent;
+    type PromiseRejectionEvent = P::PromiseRejectionEvent;
+    type SecurityPolicyViolationEvent = P::SecurityPolicyViolationEvent;
+    type StorageEvent = P::StorageEvent;
+    type SubmitEvent = P::SubmitEvent;
+    type TouchEvent = P::TouchEvent;
+    type TransitionEvent = P::TransitionEvent;
+    type UiEvent = P::UiEvent;
+    type WheelEvent = P::WheelEvent;
+    type ProgressEvent = P::ProgressEvent;
+}
+
 macro_rules! generate_event_types {
   {$(
     $( #[$no_bubble:ident] )?

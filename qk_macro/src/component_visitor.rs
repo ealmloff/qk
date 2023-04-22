@@ -95,12 +95,24 @@ impl ComponentBuilder {
             state.subscribers = subscribers.into_iter().collect();
         }
 
+        let prop_items = fn_item
+            .sig
+            .inputs
+            .iter()
+            .skip(1)
+            .filter_map(|item| match item {
+                syn::FnArg::Typed(item) => Some(item.clone().into()),
+                syn::FnArg::Receiver(_) => None,
+            })
+            .collect();
+
         Component {
             type_name,
             states,
             memos,
             rsx,
             fn_item,
+            prop_items,
         }
     }
 }

@@ -169,7 +169,7 @@ impl Memo {
             })
             .chain(self.raw_params.iter().map(|(name, _)| {
                 quote! {
-                    let #name = self.#name;
+                    let #name = &mut self.#name;
                 }
             }));
 

@@ -10,7 +10,10 @@ use crate::{
     renderer::Renderer,
 };
 
-pub struct WebRenderer {
+#[derive(Clone)]
+pub struct WebRenderer(Rc<RefCell<WebRendererInner>>);
+
+pub struct WebRendererInner {
     channel: Channel,
     ids: IdSlab<()>,
     queued_listeners: Vec<(u32, &'static str, Box<dyn FnMut(web_sys::Event)>)>,
@@ -54,18 +57,19 @@ impl Default for WebRenderer {
         // the root node
         ids.id(());
 
-        Self {
+        Self(Rc::new(RefCell::new(WebRendererInner {
             channel: Channel::default(),
             ids,
             queued_listeners: Vec::new(),
             event_handlers: SharedListeners::default(),
-        }
+        })))
     }
 }
 
 impl Renderer<WebRenderer> for WebRenderer {
     fn node(&mut self) -> u32 {
-        self.ids.id(())
+        let mut myself = self.0.borrow_mut();
+        myself.ids.id(())
     }
 
     fn append_all(&mut self, parent: u32, children: impl IntoIterator<Item = u32>) {
@@ -75,51 +79,63 @@ impl Renderer<WebRenderer> for WebRenderer {
     }
 
     fn set_attribute(&mut self, id: u32, name: &'static str, value: &str) {
-        self.channel.set_attribute(id, name, value);
+        let mut myself = self.0.borrow_mut();
+        myself.channel.set_attribute(id, name, value);
     }
 
     fn set_style(&mut self, id: u32, name: &'static str, value: &str) {
-        self.channel.set_style(id, name, value);
+        let mut myself = self.0.borrow_mut();
+        myself.channel.set_style(id, name, value);
     }
 
     fn create_element(&mut self, id: u32, tag: &'static str) {
-        self.channel.create_element(id, tag);
+        let mut myself = self.0.borrow_mut();
+        myself.channel.create_element(id, tag);
     }
 
     fn create_text(&mut self, id: u32, text: &str) {
-        self.channel.create_text(id, text);
+        let mut myself = self.0.borrow_mut();
+        myself.channel.create_text(id, text);
     }
 
     fn set_text(&mut self, id: u32, text: &str) {
-        self.channel.set_text(id, text);
+        let mut myself = self.0.borrow_mut();
+        myself.channel.set_text(id, text);
     }
 
     fn append_child(&mut self, parent: u32, child: u32) {
-        self.channel.append_child(parent, child);
+        let mut myself = self.0.borrow_mut();
+        myself.channel.append_child(parent, child);
     }
 
     fn clone_node(&mut self, id: u32, new_id: u32) {
-        self.channel.clone(id, new_id);
+        let mut myself = self.0.borrow_mut();
+        myself.channel.clone(id, new_id);
     }
 
     fn copy(&mut self, id: u32, id2: u32) {
-        self.channel.copy(id, id2);
+        let mut myself = self.0.borrow_mut();
+        myself.channel.copy(id, id2);
     }
 
     fn first_child(&mut self, id: u32) {
-        self.channel.first_child(id);
+        let mut myself = self.0.borrow_mut();
+        myself.channel.first_child(id);
     }
 
     fn next_sibling(&mut self, id: u32) {
-        self.channel.next_sibling(id);
+        let mut myself = self.0.borrow_mut();
+        myself.channel.next_sibling(id);
     }
 
     fn remove(&mut self, id: u32) {
-        self.channel.remove(id);
+        let mut myself = self.0.borrow_mut();
+        myself.channel.remove(id);
     }
 
     fn return_node(&mut self, id: u32) {
-        self.ids.recycle(id)
+        let mut myself = self.0.borrow_mut();
+        myself.ids.recycle(id)
     }
 
     fn add_listener<E: EventDescription<WebRenderer>>(
@@ -128,24 +144,29 @@ impl Renderer<WebRenderer> for WebRenderer {
         _: E,
         callback: Box<dyn FnMut(web_sys::Event)>,
     ) {
+        let mut myself = self.0.borrow_mut();
         let event_name = E::NAME;
 
         if E::BUBBLES {
+            let listeners = myself.event_handlers.clone();
             {
-                let mut handlers = self.event_handlers.event_handlers.borrow_mut();
-                let handler_id = handlers.id(callback) as u16;
-                self.channel.add_listener(id, E::ID, handler_id);
+                let handler_id = {
+                    let mut handlers = myself.event_handlers.event_handlers.borrow_mut();
+                    handlers.id(callback) as u16
+                };
+                myself.channel.add_listener(id, E::ID, handler_id);
             }
-            add_delegated_event_listener(event_name, E::ID as usize, self.event_handlers.clone());
+            add_delegated_event_listener(event_name, E::ID as usize, listeners);
         } else {
-            self.queued_listeners.push((id, event_name, callback));
+            myself.queued_listeners.push((id, event_name, callback));
         }
     }
 
     fn flush(&mut self) {
-        self.channel.flush();
+        let mut myself = self.0.borrow_mut();
+        myself.channel.flush();
 
-        for (id, event_name, callback) in self.queued_listeners.drain(..) {
+        for (id, event_name, callback) in myself.queued_listeners.drain(..) {
             let cb = Closure::new(callback);
             let cb_fn: &Function = cb.as_ref().unchecked_ref();
             let node = get_node(id);

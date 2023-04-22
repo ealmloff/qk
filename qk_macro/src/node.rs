@@ -238,20 +238,18 @@ pub fn update_dyn_nodes(roots: &[Root]) -> proc_macro2::TokenStream {
     });
 
     quote! {
-        ui.with_mut(|ui| {
-            // initialize all the variables
+        // initialize all the variables
+        #(
             #(
-                #(
-                    #ids = ui.node();
-                )*
+                #ids = ui.node();
             )*
+        )*
 
-            // create the root
-            let tmpl = get_template(&mut *ui);
-            #(#clone_nodes)*
+        // create the root
+        let tmpl = get_template(ui);
+        #(#clone_nodes)*
 
-            // traverse the tree
-            #(#traverse_roots)*
-        })
+        // traverse the tree
+        #(#traverse_roots)*
     }
 }

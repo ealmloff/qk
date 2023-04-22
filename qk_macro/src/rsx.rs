@@ -81,7 +81,7 @@ impl Elements {
                         None,
                         update,
                         Some(parse_quote! { move }),
-                        vec![(parse_quote!(ui), parse_quote!(qk::copy::State<WebRenderer>))],
+                        vec![(parse_quote!(ui), parse_quote!(&mut R))],
                     );
                     self.memo_ids.push(memo_id);
                 }
@@ -122,7 +122,7 @@ impl Elements {
         let create_arr = (0..roots.len()).map(|_| quote! { std::sync::atomic::AtomicU32::new(0) });
 
         quote! {
-            fn get_template<P: PlatformEvents>(mut ui: impl qk::prelude::Renderer<P>) -> &'static [std::sync::atomic::AtomicU32; #arr_len] {
+            fn get_template<R2: qk::renderer::Renderer<R2> + qk::events::PlatformEvents>(mut ui: &mut R2) -> &'static [std::sync::atomic::AtomicU32; #arr_len] {
                 static TEMPLATE: [std::sync::atomic::AtomicU32; #arr_len] = [#(#create_arr,)*];
 
                 if unsafe{TEMPLATE.get_unchecked(0)}.load(std::sync::atomic::Ordering::Relaxed) == 0 {
