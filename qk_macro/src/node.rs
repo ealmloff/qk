@@ -1,10 +1,13 @@
 use proc_macro2::{Ident, TokenStream};
 use quote::{quote, ToTokens};
-use syn::{parse_quote, Expr};
+use syn::visit::Visit;
+use syn::{parse_quote, Expr, ExprClosure};
 use syn_rsx::NodeValueExpr;
 
+use crate::component_visitor::SubscriptionVisitor;
 use crate::format::FormattedText;
 use crate::rsx::Root;
+use crate::state::State;
 
 #[derive(Debug)]
 pub struct DynamicNode {
@@ -31,6 +34,86 @@ impl DynamicNode {
         }
     }
 
+    pub fn complete_listeners(&mut self, states: &Vec<State>) {
+        if let DynamicNodeType::Element(element) = &mut self.node {
+            for listener in &mut element.listeners {
+                let mut subscribers = SubscriptionVisitor {
+                    states,
+                    subscribed: Vec::new(),
+                };
+                subscribers.visit_expr_closure(&listener.value);
+
+                listener.states_used = subscribers.subscribed;
+            }
+        }
+    }
+
+    pub fn listeners(&self, states: &[State], ty: &Ident) -> Option<Expr> {
+        let id = self.ident();
+        match &self.node {
+            DynamicNodeType::Element(element) => {
+                if element.listeners.is_empty() {
+                    return None;
+                }
+
+                let listeners = element.listeners.iter().filter_map(|listener| {
+                    let key = &listener.key;
+                    let ExprClosure {
+                        attrs,
+                        asyncness,
+                        capture,
+                        or1_token,
+                        inputs,
+                        or2_token,
+                        output,
+                        body,..
+                    } = &listener.value;
+                    let inputs=inputs.iter();
+
+                    key.strip_prefix("on").map(|event| {
+                        let as_ident = Ident::new(event, proc_macro2::Span::call_site());
+                        let rw_tracks = listener
+                            .states_used
+                            .iter()
+                            .map(|id| {
+                                let state=&states[*id];
+                                let state_name = &state.name;
+                                state.construct_tracked(parse_quote!(#state_name))
+                            });
+                        let rw_names=listener.states_used.iter().map(|id| {
+                            let state=&states[*id];
+                            &state.name
+                        });
+
+                        let update_maybe_writes = listener.states_used.iter().map(|id| states[*id].update_fn());
+
+                        quote! {
+                            ui.add_listener(#id, qk::events::#as_ident, Box::new({
+                                let comp = comp.clone();
+                                #(#attrs)* move #asyncness #capture #or1_token #(#inputs,)* #or2_token #output {
+                                    let mut comp = comp.borrow_mut();
+                                    let #ty{#(#rw_names,)* tracking, ui, ..} = &mut *comp;
+                                    #(#rw_tracks)*
+                                    let __return=#body;
+                                    #(comp.#update_maybe_writes();)*
+                                    comp.ui.flush();
+                                    __return
+                                }
+                            }));
+                        }
+                    })
+                });
+
+                Some(parse_quote! {
+                    {
+                        #(#listeners)*
+                    }
+                })
+            }
+            _ => None,
+        }
+    }
+
     pub fn update(&self) -> Option<Expr> {
         let id = self.ident();
         match &self.node {
@@ -42,15 +125,8 @@ impl DynamicNode {
                 let attributes = element.attributes.iter().map(|attribute| {
                     let key = &attribute.key;
                     let value = &attribute.value;
-                    if let Some(event) = key.strip_prefix("on") {
-                        let as_ident = Ident::new(event, proc_macro2::Span::call_site());
-                        quote! {
-                            ui.add_listener(#id, qk::events::#as_ident, Box::new(#value));
-                        }
-                    } else {
-                        quote! {
-                            ui.set_attribute(#id, #key, &#value);
-                        }
+                    quote! {
+                        ui.set_attribute(#id, #key, &#value);
                     }
                 });
 
@@ -91,7 +167,15 @@ pub enum TraverseOperation {
 #[derive(Debug)]
 pub struct DynElement {
     pub attributes: Vec<DynamicAttribute>,
+    pub listeners: Vec<Listener>,
     pub children: Vec<DynamicNode>,
+}
+
+#[derive(Debug)]
+pub struct Listener {
+    pub key: String,
+    pub value: ExprClosure,
+    pub states_used: Vec<usize>,
 }
 
 #[derive(Debug)]

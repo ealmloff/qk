@@ -5,7 +5,7 @@ use crate::{
     component_visitor::ComponentBuilder,
     format::{FormattedSegment, FormattedText, Segment},
     node::{
-        self, update_dyn_nodes, DynElement, DynText, DynamicAttribute, DynamicNode,
+        self, update_dyn_nodes, DynElement, DynText, DynamicAttribute, DynamicNode, Listener,
         TraverseOperation,
     },
 };
@@ -76,6 +76,7 @@ impl Elements {
         // Go through all dynamic nodes and create memos for them
         for root in &mut self.roots {
             for dyn_node in &mut root.dynamic_nodes {
+                dyn_node.complete_listeners(&builder.states);
                 if let Some(update) = dyn_node.update() {
                     let memo_id = builder.memo(
                         None,
@@ -177,6 +178,7 @@ impl Elements {
         });
 
         let mut dyn_attributes = Vec::new();
+        let mut listeners = Vec::new();
 
         for attr in attributes {
             let Node::Attribute(attr) = attr else {
@@ -189,9 +191,10 @@ impl Elements {
             let value = value.as_ref().unwrap().as_ref();
 
             if key.starts_with("on") {
-                dyn_attributes.push(DynamicAttribute {
+                listeners.push(Listener {
                     key,
-                    value: value.clone(),
+                    value: parse_quote!(#value),
+                    states_used: Default::default(),
                 });
             } else if let Expr::Lit(ExprLit {
                 lit: Lit::Str(lit_str),
@@ -218,7 +221,7 @@ impl Elements {
             }
         }
 
-        if !dyn_attributes.is_empty() || force_dyn {
+        if !dyn_attributes.is_empty() || !listeners.is_empty() || force_dyn {
             let id = root.dynamic_nodes.len();
             root.dynamic_nodes.push(DynamicNode {
                 root_id: root.idx,
@@ -226,6 +229,7 @@ impl Elements {
                 path: self.current_path.clone(),
                 node: node::DynamicNodeType::Element(DynElement {
                     attributes: dyn_attributes,
+                    listeners,
                     children: Default::default(),
                 }),
             });

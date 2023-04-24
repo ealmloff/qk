@@ -120,10 +120,11 @@ impl Memo {
             .chain(self.raw_params.iter().map(|(r, _)| r).cloned());
         let ty = &self.ty;
 
-        let rw_tracks = self
-            .subscriptions
-            .iter()
-            .map(|id| states[*id].construct_tracked());
+        let rw_tracks = self.subscriptions.iter().map(|id| {
+            let state = &states[*id];
+            let name = state.private_name();
+            state.construct_tracked(parse_quote! {&mut #name})
+        });
 
         let movability = &self.capture;
 
@@ -139,6 +140,7 @@ impl Memo {
                         #subscribers,
                     )*
                 );
+
                 Effect {
                     rx: #private_name,
                     rx_subscriptions: tracking.read.get(),

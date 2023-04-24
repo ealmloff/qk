@@ -183,15 +183,17 @@ impl Visit<'_> for ComponentBuilder {
 }
 
 #[derive(Debug)]
-struct SubscriptionVisitor<'a> {
-    states: &'a Vec<State>,
-    subscribed: Vec<usize>,
+pub struct SubscriptionVisitor<'a> {
+    pub states: &'a Vec<State>,
+    pub subscribed: Vec<usize>,
 }
 
 impl<'a, 'b> Visit<'a> for SubscriptionVisitor<'b> {
     fn visit_ident(&mut self, i: &'a Ident) {
         if let Some(name) = self.states.iter().find(|s| &s.name == i) {
-            self.subscribed.push(name.id);
+            if !self.subscribed.contains(&name.id) {
+                self.subscribed.push(name.id);
+            }
         }
 
         syn::visit::visit_ident(self, i);

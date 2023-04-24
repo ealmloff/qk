@@ -159,6 +159,22 @@ impl ToTokens for Component {
             }
         });
 
+        let listeners = self.rsx.roots.iter().map(|root|{
+            let dynamic_nodes = &root.dynamic_nodes;
+
+            let listeners = dynamic_nodes.iter().filter_map(|dyn_node|{
+                dyn_node.listeners(&self.states, &self.comp_name())
+            }).map(|listener|{
+                quote! {
+                    #listener
+                }
+            });
+
+            quote! {
+                #(#listeners)*
+            }
+        });
+
         let prop_name = self.prop_name();
         let props_struct = self.props_struct();
 
@@ -174,8 +190,8 @@ impl ToTokens for Component {
                 #(#update_states)*
             }
 
-            impl<R: qk::renderer::Renderer<R> + qk::events::PlatformEvents + Clone> qk::component::Component<R, R> for #prop_name {
-                type State = #comp_name<R>;
+            impl<R: qk::renderer::Renderer<R> + qk::events::PlatformEvents + Clone + 'static> qk::component::Component<R, R> for #prop_name {
+                type State = std::rc::Rc<std::cell::RefCell<#comp_name<R>>>;
                 
                 fn create(mut ui: R, props: Self) -> Self::State {
                     let tracking: DirtyTrackSet<u8, u8> = DirtyTrackSet::default();
@@ -187,6 +203,11 @@ impl ToTokens for Component {
                         ui: ui.clone(),
                         #(#create_comp,)*
                     };
+
+                    let comp = std::rc::Rc::new(std::cell::RefCell::new(comp));
+
+                    #(#listeners)*
+
                     comp
                 }
             }

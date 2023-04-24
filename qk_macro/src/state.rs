@@ -15,6 +15,11 @@ pub struct State {
 }
 
 impl State {
+    pub fn private_name(&self) -> Ident {
+        let name = &self.name;
+        Ident::new(&format!("__{name}"), name.span())
+    }
+
     pub fn type_def(&self) -> TokenStream {
         let name = &self.name;
         let ty = &self.ty;
@@ -46,13 +51,12 @@ impl State {
         }
     }
 
-    pub fn construct_tracked(&self) -> TokenStream {
+    pub fn construct_tracked(&self, path: Expr) -> TokenStream {
         let name = &self.name;
-        let private_name = Ident::new(&format!("__{name}"), name.span());
         let id = self.id as u8;
         quote! {
             let mut #name = RwTrack {
-                data: &mut #private_name,
+                data: #path,
                 tracking: tracking.track(#id),
             };
         }
