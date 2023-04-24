@@ -237,7 +237,7 @@ impl Parse for Component {
 
         visitor.visit_item_fn(&f);
 
-        let mut myself = visitor.build();
+        let mut myself = visitor.build()?;
 
         ComponentVisitorMut {
             component: &myself,

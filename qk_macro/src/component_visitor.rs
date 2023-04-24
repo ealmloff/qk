@@ -13,7 +13,7 @@ use syn::{ExprPath, Pat, PathArguments, PathSegment, TypeTuple};
 pub struct ComponentBuilder {
     pub states: Vec<State>,
     pub memos: Vec<Memo>,
-    pub rsx: Option<Elements>,
+    pub rsx: Option<Result<Elements, syn::Error>>,
     pub fn_item: ItemFn,
     pub type_name: Ident,
     pub in_reactive: bool,
@@ -62,7 +62,7 @@ impl ComponentBuilder {
         id
     }
 
-    pub fn build(self) -> Component {
+    pub fn build(self) -> Result<Component, syn::Error> {
         let Self {
             mut states,
             mut memos,
@@ -71,7 +71,7 @@ impl ComponentBuilder {
             type_name,
             ..
         } = self;
-        let rsx = rsx.expect("rsx macro is required");
+        let rsx = rsx.expect("rsx macro is required")?;
 
         // Resolve subscribers
         for i in 0..memos.len() {
@@ -106,24 +106,25 @@ impl ComponentBuilder {
             })
             .collect();
 
-        Component {
+        Ok(Component {
             type_name,
             states,
             memos,
             rsx,
             fn_item,
             prop_items,
-        }
+        })
     }
 }
 
 impl Visit<'_> for ComponentBuilder {
     fn visit_macro(&mut self, mac: &syn::Macro) {
         if mac.path.to_token_stream().to_string() == "rsx" {
-            if let Ok(mut rsx) = parse2::<Elements>(mac.tokens.clone()) {
+            let mut rsx = parse2::<Elements>(mac.tokens.clone());
+            if let Ok(rsx) = &mut rsx {
                 rsx.construct_memos(self);
-                self.rsx = Some(rsx);
             }
+            self.rsx = Some(rsx);
         }
     }
 
