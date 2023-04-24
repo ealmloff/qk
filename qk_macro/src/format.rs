@@ -41,18 +41,23 @@ impl FromStr for FormattedText {
                 let mut current_captured = String::new();
                 while let Some(c) = chars.next() {
                     if c == ':' {
-                        let mut current_format_args = String::new();
-                        for c in chars.by_ref() {
-                            if c == '}' {
-                                segments.push(Segment::Formatted(FormattedSegment {
-                                    format_args: current_format_args,
-                                    segment: parse_str(&current_captured)?,
-                                }));
-                                break;
+                        if chars.peek() == Some(&':') {
+                            current_captured.push(c);
+                            chars.next();
+                        } else {
+                            let mut current_format_args = String::new();
+                            for c in chars.by_ref() {
+                                if c == '}' {
+                                    segments.push(Segment::Formatted(FormattedSegment {
+                                        format_args: current_format_args,
+                                        segment: parse_str(&current_captured)?,
+                                    }));
+                                    break;
+                                }
+                                current_format_args.push(c);
                             }
-                            current_format_args.push(c);
+                            break;
                         }
-                        break;
                     }
                     if c == '}' {
                         segments.push(Segment::Formatted(FormattedSegment {
