@@ -251,7 +251,7 @@ mod js {
     }
 
     fn add_listener(id: u32, event_id: u16, handler_id: u16) {
-        r#"nodes[$id$].setAttribute("data-"+($event_id$), $handler_id$);"#
+        r#"nodes[$id$].setAttribute("data-event-"+($event_id$), $handler_id$);"#
     }
 }
 
@@ -290,7 +290,7 @@ fn add_delegated_event_listener(
 
             while !node.is_null() {
                 // navigate up tree
-                if let Some(maybe_handler) = node.get_attribute(&format!("data-{event_id}")) {
+                if let Some(maybe_handler) = node.get_attribute(&format!("data-event-{event_id}")) {
                     if let Ok(handler_id) = maybe_handler.parse::<u32>() {
                         let mut handlers = listeners.event_handlers.borrow_mut();
                         let handler = handlers.get_mut(handler_id).expect("handler not found");

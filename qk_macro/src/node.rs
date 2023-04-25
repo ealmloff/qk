@@ -94,10 +94,9 @@ impl DynamicNode {
                                     let mut comp = comp.borrow_mut();
                                     let #ty{#(#rw_names,)* tracking, ui, ..} = &mut *comp;
                                     #(#rw_tracks)*
-                                    let __return=#body;
+                                    #body;
                                     #(comp.#update_maybe_writes();)*
                                     comp.ui.flush();
-                                    __return
                                 }
                             }));
                         }

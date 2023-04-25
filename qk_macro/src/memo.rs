@@ -132,6 +132,7 @@ impl Memo {
             #private_name = {
                 tracking.reset_read();
                 #( #rw_tracks )*
+                #[allow(clippy::unused_unit)]
                 let #private_name = Box::new(#movability |#parameters| {
                     #closure
                 }) as Box<dyn Fn(#types) -> #ty>;

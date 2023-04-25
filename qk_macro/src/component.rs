@@ -177,6 +177,13 @@ impl ToTokens for Component {
 
         let prop_name = self.prop_name();
         let props_struct = self.props_struct();
+        let props = self.prop_items.iter().map(|state| {
+            let name = &state.name;
+
+            quote! {
+                #name
+            }
+        });
 
         tokens.extend(quote! {
             #props_struct
@@ -193,9 +200,9 @@ impl ToTokens for Component {
             impl<R: qk::renderer::Renderer<R> + qk::events::PlatformEvents + Clone + 'static> qk::component::Component<R, R> for #prop_name {
                 type State = std::rc::Rc<std::cell::RefCell<#comp_name<R>>>;
                 
-                fn create(mut ui: R, props: Self) -> Self::State {
+                fn create(self, ui: &mut R) -> Self::State {
+                    let Self { #(#props,)* } = self;
                     let tracking: DirtyTrackSet<u8, u8> = DirtyTrackSet::default();
-                    let ui = &mut ui;
                     #(#ident_init)*
                     #(#body)*
                     let mut comp = #comp_name {
