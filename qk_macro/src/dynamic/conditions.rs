@@ -1,4 +1,6 @@
+use quote::ToTokens;
 use syn::parse::Parse;
+use syn_rsx::Node;
 
 pub struct Condition {
     if_token: syn::Token![if],
@@ -8,25 +10,79 @@ pub struct Condition {
     else_body: Option<syn::Block>,
 }
 
-impl Parse for Condition {
-    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        let if_token = input.parse()?;
-        let condition = input.parse()?;
-        let body = input.parse()?;
+impl Condition {
+    fn parse_from(nodes: impl Iterator<Item = Node>) -> Option<Self> {
+        let mut nodes = nodes.peekable();
 
-        let mut else_token = None;
-        let mut else_body = None;
-        if let Ok(parsed_else_token) = input.parse::<syn::Token![else]>() {
-            let parsed_else_body = input.parse()?;
-            else_token = Some(parsed_else_token);
-            else_body = Some(parsed_else_body);
-        }
-        Ok(Self {
-            if_token,
-            condition,
-            body,
-            else_token,
-            else_body,
-        })
+        nodes.next_if(|node| matches!(node, Node::Element(element) if element.name.to_token_stream().to_string() == "if")) .and_then(|if_element|{
+            let Node::Element(if_element) = if_element else{unreachable!()};
+            if let &[Node::Block(condition)] = &if_element.attributes.as_slice(){
+                todo!()
+            }else{None}
+         })
+        // match value {
+        //     Node::Element(element) => {
+        //         let for_token = element.name;
+        //         let mut attrs = element.attributes.into_iter();
+        //         let pat = attrs
+        //             .next()
+        //             .and_then(|attr| match attr {
+        //                 syn_rsx::Node::Attribute(attr) => match (attr.key, attr.value) {
+        //                     (NodeName::Path(path), None) => Some(path),
+        //                     _ => None,
+        //                 },
+        //                 _ => None,
+        //             })
+        //             .ok_or(())?;
+        //         let (in_token, iterator) = attrs
+        //             .next()
+        //             .and_then(|attr| match attr {
+        //                 syn_rsx::Node::Attribute(attr) => match (attr.key, attr.value) {
+        //                     (NodeName::Path(path), Some(iterator)) => {
+        //                         (path.to_token_stream().to_string() == "in")
+        //                             .then_some((path, iterator))
+        //                     }
+        //                     _ => None,
+        //                 },
+        //                 _ => None,
+        //             })
+        //             .ok_or(())?;
+        //         if attrs.next().is_some() {
+        //             return Err(());
+        //         }
+        //         Ok(Self {
+        //             for_token,
+        //             pat,
+        //             in_token,
+        //             iterator,
+        //             children: element.children,
+        //         })
+        //     }
+        //     _ => Err(()),
+        // }
     }
+}
+
+#[test]
+fn parses() {
+    use quote::quote;
+    use syn_rsx::parse2;
+
+    // Create HTML `TokenStream`.
+    let tokens = quote! {
+        <if {true}>
+        </if>
+        <elif {true}>
+        </elif>
+        <else>
+        </else>
+    };
+
+    // Parse the tokens into a tree of `Node`s.
+    let mut nodes = parse2(tokens).unwrap();
+    println!("{nodes:#?}");
+
+    // // Convert the `Node`s into a `Loop`.
+    // let loop_ = Loop::try_from(nodes.pop().unwrap()).unwrap();
+    // println!("{loop_:#?}");
 }
